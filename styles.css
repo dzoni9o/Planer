@@ -184,6 +184,7 @@ select.fi{cursor:pointer}
 .wall.selected.open{stroke:var(--blue);stroke-width:3;stroke-dasharray:6 5}
 .door-body{stroke:var(--amber);stroke-width:2;fill:rgba(232,160,48,.06)}
 .door-swing{stroke:var(--amber);stroke-width:1.5;fill:none}
+.door-leaf{stroke:var(--amber);stroke-width:1.5;fill:none;opacity:.65}
 .win-outer{stroke:var(--blue);stroke-width:3;fill:none}
 .win-inner{stroke:var(--blue);stroke-width:1;fill:none;opacity:.5}
 .box-ring{stroke-width:2.5;cursor:pointer}

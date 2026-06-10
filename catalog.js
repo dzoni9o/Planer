@@ -493,6 +493,7 @@ function _attachSheetDelegation(inner){
       case 'setKonfSerija':     setKonfSerija(args[0]); break;
       case 'selKabl':           selKabl(parseInt(args[0])); break;
       case 'selCorner':         selCorner(t); break;
+      case 'selOpeningOption':  selOpeningOption(t); break;
       case 'selMat':            selMat(t); break;
       case 'selSize':           selSize(t); break;
     }
@@ -821,6 +822,11 @@ function selCorner(el){
   el.classList.add('active');
 }
 
+function selOpeningOption(el){
+  el.parentElement.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+}
+
 function selMat(el){
   document.querySelectorAll('#mat-group .seg-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
@@ -899,4 +905,3 @@ function nabavkaZaDoznu(size, materijal){
 
   return items;
 }
-

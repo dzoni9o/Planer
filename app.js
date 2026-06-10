@@ -670,92 +670,152 @@ function obrisiVezu(cid){
   closeSheet(); render(); saveState(); toast('Veza obrisana');
 }
 
+
+function wallCornerLabels(wall){
+  const isHoriz=(wall==='N'||wall==='S');
+  return {
+    start: isHoriz ? 'Lijevi ugao' : 'Gornji ugao',
+    end: isHoriz ? 'Desni ugao' : 'Donji ugao',
+  };
+}
+
+function defaultOpeningOffsetCm(lenM, widthM, fallbackM){
+  const half=widthM/2;
+  const min=half+0.1;
+  const max=Math.max(min, lenM-half-0.1);
+  const center=Math.min(Math.max(fallbackM, min), max);
+  return Math.round(center*100);
+}
+
+function readOpening(prefix, roomId, wall, fallbackOffsetM, fallbackWidthM){
+  const r=S.rooms.find(x=>x.id===roomId);
+  if(!r) return null;
+  const lenM=wallLenM(r,wall);
+  const cornerEl=document.querySelector('#corner-group .seg-btn.active');
+  const fromCorner=cornerEl?cornerEl.dataset.corner:'start';
+  const offsetCm=parseFloat(document.getElementById(prefix+'-offset')?.value);
+  const widthCm=parseFloat(document.getElementById(prefix+'-width')?.value);
+  const offsetM=(Number.isFinite(offsetCm)?offsetCm:fallbackOffsetM*100)/100;
+  const widthM=(Number.isFinite(widthCm)?widthCm:fallbackWidthM*100)/100;
+
+  if(widthM<=0 || widthM>=lenM){
+    toast('Sirina mora biti veca od 0 i manja od zida');
+    return null;
+  }
+
+  const minM=widthM/2;
+  const maxM=lenM-widthM/2;
+  if(offsetM<minM || offsetM>maxM){
+    toast('Centar mora biti izmedju '+Math.ceil(minM*100)+' i '+Math.floor(maxM*100)+' cm');
+    return null;
+  }
+
+  return {fromCorner, offsetM, widthM};
+}
+
 function promptAddDoor(){
   if(!S.selWall) return;
   const {roomId,wall}=S.selWall;
   const r=S.rooms.find(x=>x.id===roomId);
+  if(!r) return;
   const lenM=wallLenM(r,wall);
-  const isHoriz=(wall==='N'||wall==='S');
-  const c1=isHoriz?'Lijevi ugao':'Gornji ugao';
-  const c2=isHoriz?'Desni ugao':'Donji ugao';
+  const labels=wallCornerLabels(wall);
+  const widthM=0.9;
+  const offsetCm=defaultOpeningOffsetCm(lenM,widthM,1);
   openSheet(`
-    <div class="sheet-title">🚪 Vrata · Zid ${wall}</div>
+    <div class="sheet-title">Vrata - Zid ${wall}</div>
     <div style="display:flex;flex-direction:column;gap:14px">
       <div class="fg">
         <div class="fl">Meriti od ugla</div>
         <div class="seg-group" id="corner-group">
-          <div class="seg-btn active" data-corner="start" data-action="selCorner">${c1}</div>
-          <div class="seg-btn" data-corner="end" data-action="selCorner">${c2}</div>
+          <div class="seg-btn active" data-corner="start" data-action="selCorner">${labels.start}</div>
+          <div class="seg-btn" data-corner="end" data-action="selCorner">${labels.end}</div>
         </div>
       </div>
       <div class="fg">
-        <div class="fl">Udaljenost centra vrata (cm)</div>
-        <input class="fi" id="d-offset" type="number" inputmode="numeric" value="100">
-        <div style="font-size:9px;color:var(--text3);margin-top:4px">Zid: ${Math.round(lenM*100)} cm</div>
+        <div class="fl">Pozicija centra vrata (cm)</div>
+        <input class="fi" id="d-offset" type="number" inputmode="numeric" min="1" max="${Math.round(lenM*100)}" step="1" value="${offsetCm}">
+        <div style="font-size:9px;color:var(--text3);margin-top:4px">Zid: ${Math.round(lenM*100)} cm - vrata se centriraju na ovu tacku</div>
       </div>
       <div class="fg">
-        <div class="fl">Širina vrata (cm)</div>
-        <input class="fi" id="d-width" type="number" inputmode="numeric" value="90">
+        <div class="fl">Sirina vrata (cm)</div>
+        <input class="fi" id="d-width" type="number" inputmode="numeric" min="40" max="${Math.round(lenM*100-1)}" step="1" value="90">
+      </div>
+      <div class="fg">
+        <div class="fl">Sarka</div>
+        <div class="seg-group" id="hinge-group">
+          <div class="seg-btn active" data-hinge="start" data-action="selOpeningOption">Lijevo</div>
+          <div class="seg-btn" data-hinge="end" data-action="selOpeningOption">Desno</div>
+        </div>
+      </div>
+      <div class="fg">
+        <div class="fl">Smer otvaranja</div>
+        <div class="seg-group" id="swing-group">
+          <div class="seg-btn active" data-swing="in" data-action="selOpeningOption">Unutra</div>
+          <div class="seg-btn" data-swing="out" data-action="selOpeningOption">Spolja</div>
+        </div>
       </div>
       <div class="sheet-actions">
         <button class="btn btn-primary" data-action="confirmAddDoor:${roomId}:${wall}">Postavi vrata</button>
-        <button class="btn btn-ghost" data-action="closeSheet">Otkaži</button>
+        <button class="btn btn-ghost" data-action="closeSheet">Otkazi</button>
       </div>
     </div>
   `);
 }
 
 function confirmAddDoor(roomId,wall){
-  const cornerEl=document.querySelector('#corner-group .seg-btn.active');
-  const fromCorner=cornerEl?cornerEl.dataset.corner:'start';
-  const offsetM=parseFloat(document.getElementById('d-offset')?.value)/100||1;
-  const widthM=parseFloat(document.getElementById('d-width')?.value)/100||0.9;
-  S.elements.push({id:'e'+uid(),roomId,wall,fromCorner,offsetM,type:'door',widthM});
+  const opening=readOpening('d',roomId,wall,1,0.9);
+  if(!opening) return;
+  const hingeEl=document.querySelector('#hinge-group .seg-btn.active');
+  const swingEl=document.querySelector('#swing-group .seg-btn.active');
+  const hinge=hingeEl?.dataset.hinge||'start';
+  const swing=swingEl?.dataset.swing||'in';
+  S.elements.push({id:'e'+uid(),roomId,wall,type:'door',...opening,hinge,swing});
   closeSheet(); setToolbarDefault(); render();
   saveState();
   toast('Vrata dodana');
 }
+
 function promptAddWindow(){
   if(!S.selWall) return;
   const {roomId,wall}=S.selWall;
   const r=S.rooms.find(x=>x.id===roomId);
+  if(!r) return;
   const lenM=wallLenM(r,wall);
-  const isHoriz=(wall==='N'||wall==='S');
-  const c1=isHoriz?'Lijevi ugao':'Gornji ugao';
-  const c2=isHoriz?'Desni ugao':'Donji ugao';
+  const labels=wallCornerLabels(wall);
+  const widthM=1.2;
+  const offsetCm=defaultOpeningOffsetCm(lenM,widthM,1.5);
   openSheet(`
-    <div class="sheet-title">🪟 Prozor · Zid ${wall}</div>
+    <div class="sheet-title">Prozor - Zid ${wall}</div>
     <div style="display:flex;flex-direction:column;gap:14px">
       <div class="fg">
         <div class="fl">Meriti od ugla</div>
         <div class="seg-group" id="corner-group">
-          <div class="seg-btn active" data-corner="start" data-action="selCorner">${c1}</div>
-          <div class="seg-btn" data-corner="end" data-action="selCorner">${c2}</div>
+          <div class="seg-btn active" data-corner="start" data-action="selCorner">${labels.start}</div>
+          <div class="seg-btn" data-corner="end" data-action="selCorner">${labels.end}</div>
         </div>
       </div>
       <div class="fg">
-        <div class="fl">Udaljenost centra prozora (cm)</div>
-        <input class="fi" id="w-offset" type="number" inputmode="numeric" value="150">
-        <div style="font-size:9px;color:var(--text3);margin-top:4px">Zid: ${Math.round(lenM*100)} cm</div>
+        <div class="fl">Pozicija centra prozora (cm)</div>
+        <input class="fi" id="w-offset" type="number" inputmode="numeric" min="1" max="${Math.round(lenM*100)}" step="1" value="${offsetCm}">
+        <div style="font-size:9px;color:var(--text3);margin-top:4px">Zid: ${Math.round(lenM*100)} cm - prozor se centrira na ovu tacku</div>
       </div>
       <div class="fg">
-        <div class="fl">Širina prozora (cm)</div>
-        <input class="fi" id="w-width" type="number" inputmode="numeric" value="120">
+        <div class="fl">Sirina prozora (cm)</div>
+        <input class="fi" id="w-width" type="number" inputmode="numeric" min="40" max="${Math.round(lenM*100-1)}" step="1" value="120">
       </div>
       <div class="sheet-actions">
         <button class="btn btn-primary" data-action="confirmAddWindow:${roomId}:${wall}">Postavi prozor</button>
-        <button class="btn btn-ghost" data-action="closeSheet">Otkaži</button>
+        <button class="btn btn-ghost" data-action="closeSheet">Otkazi</button>
       </div>
     </div>
   `);
 }
 
 function confirmAddWindow(roomId,wall){
-  const cornerEl=document.querySelector('#corner-group .seg-btn.active');
-  const fromCorner=cornerEl?cornerEl.dataset.corner:'start';
-  const offsetM=parseFloat(document.getElementById('w-offset')?.value)/100||1.5;
-  const widthM=parseFloat(document.getElementById('w-width')?.value)/100||1.2;
-  S.elements.push({id:'e'+uid(),roomId,wall,fromCorner,offsetM,type:'window',widthM});
+  const opening=readOpening('w',roomId,wall,1.5,1.2);
+  if(!opening) return;
+  S.elements.push({id:'e'+uid(),roomId,wall,type:'window',...opening});
   closeSheet(); setToolbarDefault(); render();
   saveState();
   toast('Prozor dodan');
@@ -905,17 +965,20 @@ function renderElements(){
     if(el.type==='door'){
       const wPx=(el.widthM||0.9)*PX_PER_M;
       const hw=wPx/2;
-      if(isH){
-        // Horizontal wall door
-        const x1=p.x-hw, x2=p.x+hw, y=p.y;
-        const sweepY=el.wall==='N'?-wPx:wPx;
-        eHtml+=`<line class="door-body" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="var(--amber)" stroke-width="3"/>`;
-        eHtml+=`<path class="door-swing" d="M${x1},${y} A${wPx},${wPx} 0 0,${el.wall==='S'?1:0} ${x1+wPx*0.707},${y+(el.wall==='S'?wPx*0.707:-wPx*0.707)}"/>`;
-      } else {
-        const y1=p.y-hw, y2=p.y+hw, x=p.x;
-        eHtml+=`<line class="door-body" x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="var(--amber)" stroke-width="3"/>`;
-        eHtml+=`<path class="door-swing" d="M${x},${y1} A${wPx},${wPx} 0 0,${el.wall==='E'?1:0} ${x+(el.wall==='E'?wPx*0.707:-wPx*0.707)},${y1+wPx*0.707}"/>`;
-      }
+      const ax=isH?1:0, ay=isH?0:1;
+      const x1=p.x-ax*hw, y1=p.y-ay*hw;
+      const x2=p.x+ax*hw, y2=p.y+ay*hw;
+      const hingeIsEnd=el.hinge==='end';
+      const hx=hingeIsEnd?x2:x1, hy=hingeIsEnd?y2:y1;
+      const vx=hingeIsEnd?-ax:ax, vy=hingeIsEnd?-ay:ay;
+      const swingDir=el.swing==='out'?-1:1;
+      const nx=(p.nx||0)*swingDir, ny=(p.ny||0)*swingDir;
+      const ex=hx+(vx*0.7+nx*0.7)*wPx;
+      const ey=hy+(vy*0.7+ny*0.7)*wPx;
+      const sweep=(hingeIsEnd?0:1) ^ (el.swing==='out'?1:0);
+      eHtml+=`<line class="door-body" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--amber)" stroke-width="3"/>`;
+      eHtml+=`<path class="door-swing" d="M${hx},${hy} A${wPx},${wPx} 0 0,${sweep} ${ex},${ey}"/>`;
+      eHtml+=`<line class="door-leaf" x1="${hx}" y1="${hy}" x2="${ex}" y2="${ey}"/>`;
     } else if(el.type==='window'){
       const wPx=(el.widthM||1.2)*PX_PER_M;
       const hw=wPx/2;
