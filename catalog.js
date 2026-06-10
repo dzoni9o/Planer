@@ -173,8 +173,7 @@ function wallLenM(r, wall){
   return (wall==='N'||wall==='S') ? r.wM : r.hM;
 }
 
-// Element position in px on canvas
-function elemPx(el){
+function elemWallPx(el){
   const r = S.rooms.find(x=>x.id===el.roomId);
   if(!r) return null;
   const seg = wallSeg(r, el.wall);
@@ -195,15 +194,27 @@ function elemPx(el){
   const inNx = el.wall==='W' ? 1 : (el.wall==='E' ? -1 : 0);
   const inNy = el.wall==='N' ? 1 : (el.wall==='S' ? -1 : 0);
 
+  return {
+    x: wx,
+    y: wy,
+    wall: el.wall,
+    nx: inNx,
+    ny: inNy,
+  };
+}
+
+// Element position in px on canvas
+function elemPx(el){
+  const p = elemWallPx(el);
+  if(!p) return null;
   const INSET = 15; // px inside room
 
   return {
-    x: wx + inNx * INSET,
-    y: wy + inNy * INSET,
-    wall: el.wall,
-    // nx/ny still point inward (for box rendering direction)
-    nx: inNx,
-    ny: inNy,
+    x: p.x + p.nx * INSET,
+    y: p.y + p.ny * INSET,
+    wall: p.wall,
+    nx: p.nx,
+    ny: p.ny,
   };
 }
 

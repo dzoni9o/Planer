@@ -958,7 +958,7 @@ function renderElements(){
   let eHtml='', bHtml='';
 
   for(const el of S.elements){
-    const p=elemPx(el);
+    const p=(el.type==='door'||el.type==='window') ? elemWallPx(el) : elemPx(el);
     if(!p) continue;
     const isH=(el.wall==='N'||el.wall==='S');
 
