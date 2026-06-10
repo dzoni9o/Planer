@@ -212,6 +212,34 @@ function shortPdfText(value, max = 70) {
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }
 
+function projectPdfInfo() {
+  const boxes = S.elements.filter((element) => element.type === "box");
+  const doors = S.elements.filter((element) => element.type === "door").length;
+  const windows = S.elements.filter((element) => element.type === "window").length;
+  const cableM = Math.round(S.connections.reduce((sum, connection) => sum + cableLenM(connection), 0) * 10) / 10;
+  const areaM2 = Math.round(S.rooms.reduce((sum, room) => sum + Number(room.wM || 0) * Number(room.hM || 0), 0) * 10) / 10;
+  return { boxes, doors, windows, cableM, areaM2 };
+}
+
+function drawHeader(pdf, title, subtitle = "") {
+  pdf.rect(0, 0, pdf.w, 64, "#111827", "#111827", 0.1);
+  pdf.text("NIKVOLT", 34, 25, 10, "#e8c44a", true);
+  pdf.text(title, 34, 45, 15, "#ffffff", true);
+  if (subtitle) pdf.text(subtitle, pdf.w - 34, 45, 8, "#cbd5e1", false, "right");
+}
+
+function drawFooter(pdf) {
+  pdf.line(34, 812, pdf.w - 34, 812, "#e5e7eb", 0.6);
+  pdf.text("NikVolt Planer", 34, 827, 7, "#6b7280");
+  pdf.text(new Date().toLocaleDateString("sr-RS"), pdf.w - 34, 827, 7, "#6b7280", false, "right");
+}
+
+function drawInfoCard(pdf, x, y, w, h, label, value, color = "#111827") {
+  pdf.rect(x, y, w, h, "#e5e7eb", "#f8fafc", 0.5);
+  pdf.text(label, x + 10, y + 15, 7, "#64748b", true);
+  pdf.text(value, x + 10, y + 36, 15, color, true);
+}
+
 function drawPdfWall(pdf, room, wall, x, y, w, h) {
   const lengthM = wallLengthM(room, wall) || 1;
   const wallHeightM = 2.8;
@@ -220,7 +248,10 @@ function drawPdfWall(pdf, room, wall, x, y, w, h) {
   const base = y + h - 18;
   const top = base - wallHeightM * scale;
 
-  pdf.text(`${wallLabel(wall)} / ${lengthM}m`, x, y + 9, 9, "#333333", true);
+  pdf.rect(x, y, w, h, "#d1d5db", "#ffffff", 0.8);
+  pdf.rect(x, y, w, 22, "#f1f5f9", "#f1f5f9", 0.1);
+  pdf.text(`${wallLabel(wall)} / ${lengthM}m`, x + 10, y + 15, 9, "#111827", true);
+  pdf.text("vektorski prikaz zida", x + w - 10, y + 15, 7, "#64748b", false, "right");
   pdf.line(ox, base, ox + lengthM * scale, base, "#202020", 1.2);
   pdf.line(ox, top, ox + lengthM * scale, top, "#dddddd", 0.4, "2 3");
   pdf.text("0m", ox, base + 11, 7, "#777777");
@@ -271,20 +302,19 @@ function drawPdfRoom(pdf, room) {
   const margin = 34;
   const summary = roomPdfSummary(room);
   const material = MATERIJAL_ZIDA[room.materijal || "cigla"]?.label || room.materijal || "cigla";
-  pdf.text(`Prostorija: ${room.name}`, margin, 34, 16, "#141414", true);
-  pdf.text(`Dimenzije: ${room.wM} x ${room.hM} m   Materijal: ${material}`, margin, 52, 9, "#555555");
-  pdf.text(`Dozne: ${summary.boxes.length}   Kablovi: ${summary.connections.length}   Kablova: ${summary.cableM} m   Vrata: ${summary.doors}   Prozori: ${summary.windows}`, margin, 66, 9, "#555555");
+  drawHeader(pdf, `Prostorija: ${room.name}`, `${room.wM} x ${room.hM} m`);
+  pdf.text(`Materijal: ${material}`, margin, 86, 9, "#475569");
+  pdf.text(`Dozne: ${summary.boxes.length}   Kablovi: ${summary.connections.length}   Kablova: ${summary.cableM} m   Vrata: ${summary.doors}   Prozori: ${summary.windows}`, margin, 100, 9, "#475569");
 
   const cardW = pdf.w - margin * 2;
-  const cardH = 118;
+  const cardH = 110;
   [
-    ["N", margin, 88],
-    ["S", margin, 218],
-    ["W", margin, 348],
-    ["E", margin, 478],
+    ["N", margin, 124],
+    ["S", margin, 244],
+    ["W", margin, 364],
+    ["E", margin, 484],
   ].forEach(([wall, x, panelY]) => {
-    pdf.rect(x, panelY, cardW, cardH, "#d8d8d8", "#ffffff", 0.7);
-    drawPdfWall(pdf, room, wall, x + 12, panelY + 10, cardW - 24, cardH - 22);
+    drawPdfWall(pdf, room, wall, x, panelY, cardW, cardH);
   });
 
   const roomBoxes = summary.boxes;
@@ -325,15 +355,15 @@ function drawPdfRoom(pdf, room) {
       y += 11;
     });
   }
+  drawFooter(pdf);
 }
 
 function drawPdfMaterials(pdf) {
   const rows = collectPdfMaterials();
   pdf.addPage();
   const margin = 34;
-  let y = 36;
-  pdf.text("Spisak materijala", margin, y, 16, "#141414", true);
-  y += 24;
+  drawHeader(pdf, "Spisak materijala", "nabavka");
+  let y = 92;
 
   if (!rows.length) {
     pdf.text("Nema materijala za prikaz.", margin, y, 10, "#777777");
@@ -360,6 +390,7 @@ function drawPdfMaterials(pdf) {
     pdf.text(`${row.qty} ${row.unit}`, pdf.w - margin, y, 8, row.color || "#222222", true, "right");
     y += 12;
   });
+  drawFooter(pdf);
 }
 
 function exportPdf() {
@@ -369,18 +400,31 @@ function exportPdf() {
   }
 
   const pdf = new PdfWriter();
+  const info = projectPdfInfo();
   pdf.addPage();
-  pdf.text("NikVolt plan instalacije", 34, 42, 18, "#141414", true);
-  pdf.text(`Datum: ${new Date().toLocaleDateString("sr-RS")}   Prostorije: ${S.rooms.length}   Dozne: ${S.elements.filter((element) => element.type === "box").length}   Kablovi: ${S.connections.length}`, 34, 66, 9, "#555555");
-  pdf.text("PDF je generisan vektorski: zidovi, dozne, kablovi i tekst su PDF elementi, bez bitmap screenshotova.", 34, 86, 9, "#555555");
-  pdf.text("Sadrzaj", 34, 124, 13, "#222222", true);
+  drawHeader(pdf, "Plan elektro instalacije", "vektorski PDF izvestaj");
+  pdf.text("Osnovne informacije o projektu", 34, 96, 14, "#111827", true);
+  pdf.text("Izvestaj je generisan lokalno iz NikVolt planera. Zidovi, dozne, kablovi i tekst su PDF vektori.", 34, 116, 9, "#475569");
 
-  let y = 148;
+  const cardY = 148;
+  const cardW = 118;
+  drawInfoCard(pdf, 34, cardY, cardW, 58, "PROSTORIJE", `${S.rooms.length}`, "#111827");
+  drawInfoCard(pdf, 162, cardY, cardW, 58, "POVRSINA", `${info.areaM2} m2`, "#2563eb");
+  drawInfoCard(pdf, 290, cardY, cardW, 58, "DOZNE", `${info.boxes.length}`, "#16a34a");
+  drawInfoCard(pdf, 418, cardY, cardW, 58, "KABLOVI", `${info.cableM} m`, "#d97706");
+
+  pdf.text(`Vrata: ${info.doors}   Prozori: ${info.windows}   Strujni krugovi: ${S.connections.length}`, 34, 232, 9, "#475569");
+  pdf.text("Sadrzaj", 34, 278, 13, "#111827", true);
+
+  let y = 304;
   S.rooms.forEach((room, index) => {
-    pdf.text(`${index + 1}. ${room.name} (${room.wM} x ${room.hM} m)`, 48, y, 10, "#333333");
-    y += 15;
+    const summary = roomPdfSummary(room);
+    pdf.text(`${index + 1}. ${room.name}`, 48, y, 10, "#111827", true);
+    pdf.text(`${room.wM} x ${room.hM} m | ${summary.boxes.length} dozni | ${summary.connections.length} kablova | ${summary.cableM} m`, 190, y, 8, "#64748b");
+    y += 17;
   });
-  pdf.text(`${S.rooms.length + 1}. Spisak materijala`, 48, y, 10, "#333333");
+  pdf.text(`${S.rooms.length + 1}. Spisak materijala`, 48, y + 6, 10, "#111827", true);
+  drawFooter(pdf);
 
   S.rooms.forEach((room) => drawPdfRoom(pdf, room));
   drawPdfMaterials(pdf);
