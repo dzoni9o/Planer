@@ -198,6 +198,20 @@ function connectedCableLabels(box) {
     });
 }
 
+function roomPdfSummary(room) {
+  const boxes = S.elements.filter((element) => element.roomId === room.id && element.type === "box");
+  const doors = S.elements.filter((element) => element.roomId === room.id && element.type === "door").length;
+  const windows = S.elements.filter((element) => element.roomId === room.id && element.type === "window").length;
+  const connections = S.connections.filter((connection) => boxes.some((box) => box.id === connection.aId || box.id === connection.bId));
+  const cableM = Math.round(connections.reduce((sum, connection) => sum + cableLenM(connection), 0) * 10) / 10;
+  return { boxes, doors, windows, connections, cableM };
+}
+
+function shortPdfText(value, max = 70) {
+  const text = asciiPdfText(value);
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
 function drawPdfWall(pdf, room, wall, x, y, w, h) {
   const lengthM = wallLengthM(room, wall) || 1;
   const wallHeightM = 2.8;
@@ -211,6 +225,7 @@ function drawPdfWall(pdf, room, wall, x, y, w, h) {
   pdf.line(ox, top, ox + lengthM * scale, top, "#dddddd", 0.4, "2 3");
   pdf.text("0m", ox, base + 11, 7, "#777777");
   pdf.text(`${lengthM}m`, ox + lengthM * scale, base + 11, 7, "#777777", false, "right");
+  pdf.text("zona kablova", ox + lengthM * scale / 2, top - 5, 6, "#999999", false, "center");
 
   const wallElements = S.elements
     .filter((element) => element.roomId === room.id && element.wall === wall)
@@ -231,7 +246,7 @@ function drawPdfWall(pdf, room, wall, x, y, w, h) {
       if (labels.length) {
         pdf.line(px, cy - bh / 2, px, top, status.color, 0.7, "3 2");
         labels.slice(0, 3).forEach((label, index) => {
-          pdf.text(label, px + 4, top + 9 + index * 7, 6, status.color);
+          pdf.text(shortPdfText(label, 34), px + 4, top + 9 + index * 7, 6, status.color);
         });
       }
     } else if (element.type === "door") {
@@ -254,24 +269,27 @@ function drawPdfWall(pdf, room, wall, x, y, w, h) {
 function drawPdfRoom(pdf, room) {
   pdf.addPage();
   const margin = 34;
+  const summary = roomPdfSummary(room);
+  const material = MATERIJAL_ZIDA[room.materijal || "cigla"]?.label || room.materijal || "cigla";
   pdf.text(`Prostorija: ${room.name}`, margin, 34, 16, "#141414", true);
-  pdf.text(`Dimenzije: ${room.wM} x ${room.hM} m   Materijal: ${MATERIJAL_ZIDA[room.materijal || "cigla"]?.label || room.materijal || "cigla"}`, margin, 52, 9, "#555555");
+  pdf.text(`Dimenzije: ${room.wM} x ${room.hM} m   Materijal: ${material}`, margin, 52, 9, "#555555");
+  pdf.text(`Dozne: ${summary.boxes.length}   Kablovi: ${summary.connections.length}   Kablova: ${summary.cableM} m   Vrata: ${summary.doors}   Prozori: ${summary.windows}`, margin, 66, 9, "#555555");
 
-  const cardW = (pdf.w - margin * 2 - 14) / 2;
-  const cardH = 155;
+  const cardW = pdf.w - margin * 2;
+  const cardH = 118;
   [
-    ["N", margin, 78],
-    ["S", margin + cardW + 14, 78],
-    ["W", margin, 250],
-    ["E", margin + cardW + 14, 250],
-  ].forEach(([wall, x, y]) => {
-    pdf.rect(x, y, cardW, cardH, "#d8d8d8", "#ffffff", 0.7);
-    drawPdfWall(pdf, room, wall, x + 12, y + 10, cardW - 24, cardH - 22);
+    ["N", margin, 88],
+    ["S", margin, 218],
+    ["W", margin, 348],
+    ["E", margin, 478],
+  ].forEach(([wall, x, panelY]) => {
+    pdf.rect(x, panelY, cardW, cardH, "#d8d8d8", "#ffffff", 0.7);
+    drawPdfWall(pdf, room, wall, x + 12, panelY + 10, cardW - 24, cardH - 22);
   });
 
-  const roomBoxes = S.elements.filter((element) => element.roomId === room.id && element.type === "box");
-  const roomConnections = S.connections.filter((connection) => roomBoxes.some((box) => box.id === connection.aId || box.id === connection.bId));
-  let y = 445;
+  const roomBoxes = summary.boxes;
+  const roomConnections = summary.connections;
+  let y = 620;
 
   pdf.text("Dozne u prostoriji", margin, y, 11, "#222222", true);
   y += 17;
@@ -284,7 +302,7 @@ function drawPdfRoom(pdf, room) {
         y = 40;
       }
       const modules = (box.moduli || []).map((module) => module.naziv).join(", ");
-      pdf.text(`${box.code} | ${wallLabel(box.wall)} | ${box.size || 1}M | h ${box.heightCm || 110}cm | ${modules || "bez modula"}`, margin, y, 8, "#333333");
+      pdf.text(shortPdfText(`${box.code} | ${wallLabel(box.wall)} | ${box.size || 1}M | h ${box.heightCm || 110}cm | ${modules || "bez modula"}`, 110), margin, y, 8, "#333333");
       y += 11;
     });
   }
@@ -303,7 +321,7 @@ function drawPdfRoom(pdf, room) {
       const a = S.elements.find((element) => element.id === connection.aId);
       const b = S.elements.find((element) => element.id === connection.bId);
       const definition = KABLI.find((cable) => cable.sifra === (connection.kabl?.sifra || "")) || connection.kabl || {};
-      pdf.text(`${a?.code || "?"} -> ${b?.code || "?"} | ${definition.naziv || definition.sifra || "Kabl"} | ${cableLenM(connection)} m`, margin, y, 8, definition.boja || "#333333");
+      pdf.text(shortPdfText(`${a?.code || "?"} -> ${b?.code || "?"} | ${definition.naziv || definition.sifra || "Kabl"} | ${cableLenM(connection)} m`, 110), margin, y, 8, definition.boja || "#333333");
       y += 11;
     });
   }
@@ -328,12 +346,17 @@ function drawPdfMaterials(pdf) {
   pdf.line(margin, y, pdf.w - margin, y, "#dddddd", 0.8);
   y += 12;
 
-  rows.forEach((row) => {
+  rows.forEach((row, index) => {
     if (y > 800) {
       pdf.addPage();
       y = 40;
+      pdf.text("Spisak materijala", margin, y, 13, "#141414", true);
+      y += 20;
     }
-    pdf.text(row.label, margin, y, 8, row.color || "#222222");
+    if (index % 2 === 0) {
+      pdf.rect(margin - 4, y - 8, pdf.w - margin * 2 + 8, 12, "#f4f4f4", "#f4f4f4", 0.1);
+    }
+    pdf.text(shortPdfText(row.label, 82), margin, y, 8, row.color || "#222222");
     pdf.text(`${row.qty} ${row.unit}`, pdf.w - margin, y, 8, row.color || "#222222", true, "right");
     y += 12;
   });
