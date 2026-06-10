@@ -1,22 +1,21 @@
 # Planer / NikVolt
 
-Standalone HTML/JS aplikacija za planiranje instalacija.
+Standalone HTML/JS aplikacija za planiranje elektro instalacija.
 
-## Struktura
+## Fajlovi
 
-- `public/index.html` - glavna aplikacija
-- `public/pdf-export.js` - vektorski PDF izvoz
-- `build.mjs` - kopira `public/` u `dist/` za deploy
-- `vercel.json` - Vercel build/output podesavanja
+- `index.html` - glavna aplikacija
+- `pdf-export.js` - vektorski PDF izvoz
 
 ## Deploy
 
-Vercel pokrece:
+Ovo je zero-config staticki sajt. Vercel treba direktno da servira `index.html` iz root-a repo-a.
 
-```sh
-npm run build
-```
+U Vercel Project Settings ostaviti:
 
-Build pravi `dist/`, a Vercel servira `dist/index.html`.
+- Framework Preset: `Other`
+- Root Directory: prazno
+- Build Command: prazno
+- Output Directory: prazno
 
 Podaci se cuvaju lokalno u browseru kroz `localStorage` pod kljucem `nikvolt_v5`.
