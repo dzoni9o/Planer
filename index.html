@@ -69,7 +69,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   display:flex;align-items:center;
   transition:background .2s,border-color .2s;
 }
-.tb-default{display:flex;gap:8px;width:100%;align-items:center}
+.tb-default{display:flex;gap:8px;width:100%;align-items:center;flex-wrap:wrap}
 .tb-wall{display:none;gap:8px;width:100%;align-items:center}
 .tb-connect{display:none;gap:10px;width:100%;align-items:center}
 .toolbar.ctx-wall{background:rgba(90,159,212,.08);border-top-color:var(--blue)}
@@ -266,6 +266,9 @@ select.fi{cursor:pointer}
       <button class="btn btn-ghost btn-icon" onclick="promptConnect()" title="Poveži dozne">〰</button>
       <button class="btn btn-ghost btn-icon" onclick="toggleBill()" title="Obračun" id="btn-bill">📋</button>
       <button class="btn btn-ghost btn-icon" onclick="exportPdf()" title="Izvoz PDF">PDF</button>
+      <button class="btn btn-ghost btn-icon" onclick="exportProjectJson()" title="Izvoz projekta JSON">JSON↓</button>
+      <button class="btn btn-ghost btn-icon" onclick="triggerImportProject()" title="Uvoz projekta JSON">JSON↑</button>
+      <input id="import-json-input" type="file" accept="application/json,.json" style="display:none" onchange="importProjectJson(event)">
     </div>
     <!-- WALL SELECTED -->
     <div class="tb-wall">
@@ -352,6 +355,79 @@ function loadState(){
     if(data.nextBox)     S.nextBox     = data.nextBox;
     if(data.serija)      S.serija      = data.serija;
   } catch(e){ console.warn('Load failed', e); }
+}
+
+function projectStatePayload(){
+  return {
+    app: 'nikvolt',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    rooms: S.rooms,
+    elements: S.elements,
+    connections: S.connections,
+    nextRoom: S.nextRoom,
+    nextBox: S.nextBox,
+    serija: S.serija,
+  };
+}
+
+function exportProjectJson(){
+  const data = projectStatePayload();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `nikvolt-projekat-${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  toast('JSON izvezen');
+}
+
+function triggerImportProject(){
+  const input = document.getElementById('import-json-input');
+  if(input) input.click();
+}
+
+function applyImportedProject(data){
+  if(!data || !Array.isArray(data.rooms) || !Array.isArray(data.elements) || !Array.isArray(data.connections)){
+    throw new Error('Neispravan NikVolt JSON projekat');
+  }
+  S.rooms = data.rooms;
+  S.elements = data.elements;
+  S.connections = data.connections;
+  S.nextRoom = data.nextRoom || (S.rooms.length + 1);
+  S.nextBox = data.nextBox || (S.elements.filter(e=>e.type==='box').length + 1);
+  S.serija = data.serija || null;
+  S.selWall = null;
+  S.connectMode = false;
+  S.connectFrom = null;
+  saveState();
+  setToolbarDefault();
+  applyVP();
+  render();
+  hint(S.rooms.length ? 'Projekat uvezen' : 'Tapni ＋ Prostorija da počneš');
+}
+
+async function importProjectJson(event){
+  const input = event?.target;
+  const file = input?.files?.[0];
+  if(!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const ok = confirm('Uvesti JSON projekat? Trenutni projekat u browseru će biti zamenjen.');
+    if(!ok) return;
+    applyImportedProject(data);
+    toast('JSON uvezen');
+  } catch(err) {
+    console.error(err);
+    toast(err.message || 'Uvoz nije uspeo');
+  } finally {
+    if(input) input.value = '';
+  }
 }
 
 const KAT_BOJE = {
