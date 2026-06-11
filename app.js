@@ -12,11 +12,15 @@ const S = {
   billOpen: false,
   serija: null,        // null | 'MODE' | 'EXP' — bira se pri prvoj dozni, zaključava projekat
   vp: { x: 0, y: 0, scale: 1 },
+  dragRoomId: null,
+  snapGuides: [],
 };
 
 const PX_PER_M = 70;
-const SNAP_PX  = 28;
+const SNAP_PX  = 12;
+const SNAP_NEAR_PX = 34;
 const WALL_TAP = 20;
+const ROOM_DRAG_MARGIN = 26;
 
 function saveState(){
   try {
@@ -913,12 +917,13 @@ function render(){
 function renderRooms(){
   const gR=document.getElementById('g-rooms');
   const gW=document.getElementById('g-walls');
+  const gS=document.getElementById('g-snap');
   let rHtml='', wHtml='';
 
   for(const r of S.rooms){
     const isSel=S.selWall?.roomId===r.id;
     // Room fill
-    rHtml+=`<rect class="room-bg" x="${r.x}" y="${r.y}" width="${r.wPx}" height="${r.hPx}" data-rid="${r.id}"/>`;
+    rHtml+=`<rect class="room-bg${S.dragRoomId===r.id?' dragging':''}" x="${r.x}" y="${r.y}" width="${r.wPx}" height="${r.hPx}" data-rid="${r.id}"/>`;
     // Room label
     rHtml+=`<text class="room-label" x="${r.x+r.wPx/2}" y="${r.y+r.hPx/2-8}">${r.name}</text>`;
     rHtml+=`<text class="room-dim" x="${r.x+r.wPx/2}" y="${r.y+r.hPx/2+9}">${r.wM}×${r.hM}m</text>`;
@@ -937,6 +942,7 @@ function renderRooms(){
   }
   gR.innerHTML=rHtml;
   gW.innerHTML=wHtml;
+  if(gS) gS.innerHTML=renderSnapGuides();
   // Wall tap events handled centrally in canvas.js via hitWall()
   // Room dblclick for desktop edit
   document.querySelectorAll('[data-rid]').forEach(el=>{
@@ -944,6 +950,18 @@ function renderRooms(){
       el.addEventListener('dblclick', e=>{ e.stopPropagation(); promptEditRoom(el.dataset.rid); });
     }
   });
+}
+
+function renderSnapGuides(){
+  if(!S.snapGuides?.length || !S.rooms.length) return '';
+  const minX=Math.min(...S.rooms.map(r=>r.x))-24;
+  const maxX=Math.max(...S.rooms.map(r=>r.x+r.wPx))+24;
+  const minY=Math.min(...S.rooms.map(r=>r.y))-24;
+  const maxY=Math.max(...S.rooms.map(r=>r.y+r.hPx))+24;
+  return S.snapGuides.map(g=>{
+    if(g.axis==='v') return `<line class="snap-guide" x1="${g.val}" y1="${minY}" x2="${g.val}" y2="${maxY}"/>`;
+    return `<line class="snap-guide" x1="${minX}" y1="${g.val}" x2="${maxX}" y2="${g.val}"/>`;
+  }).join('');
 }
 
 function onWallTap(rid, wall){
@@ -1450,16 +1468,18 @@ function _onTouchStart(e){
   _moved = false;
   clearTimeout(_lpTimer);
 
-  // Dozna — bilježimo, tap će se obraditi u _onTouchEnd
+  // Dozna/zid imaju prioritet nad pomeranjem sobe.
   if(hitBox(pt) && !S.connectMode){ return; }
+  if(hitWall(pt) && !S.connectMode){ return; }
 
-  // Soba — pripremi drag, long-press za edit
-  const room = hitRoom(pt);
+  // Soba se vuče iz unutrašnje zone, ne iz pojasa uz zid.
+  const room = hitRoomDragZone(pt);
   if(room && !S.connectMode){
     _drag = { room, sx:pt.x, sy:pt.y, origX:room.x, origY:room.y };
+    S.dragRoomId = room.id;
     const rid = room.id;
     _lpTimer = setTimeout(()=>{
-      if(!_moved){ _drag=null; promptEditRoom(rid); }
+      if(!_moved){ S.dragRoomId=null; S.snapGuides=[]; _drag=null; promptEditRoom(rid); }
     }, LONG_PRESS_MS);
     return;
   }
@@ -1496,7 +1516,7 @@ function _onTouchMove(e){
     const pt    = _canvas(raw);
     _drag.room.x = _drag.origX + (pt.x - _drag.sx);
     _drag.room.y = _drag.origY + (pt.y - _drag.sy);
-    snapRoom(_drag.room);
+    S.snapGuides = snapRoom(_drag.room);
     render();
     return;
   }
@@ -1517,7 +1537,10 @@ function _onTouchEnd(e){
 
   if(_drag && _moved){
     saveState();
+    S.dragRoomId = null;
+    S.snapGuides = [];
     _drag = _pan = _t0 = null; _moved = false;
+    render();
     return;
   }
 
@@ -1543,6 +1566,8 @@ function _onTouchEnd(e){
 }
 
 function _reset(){
+  S.dragRoomId = null;
+  S.snapGuides = [];
   _drag = _pan = _t0 = null; _moved = false;
 }
 
@@ -1553,11 +1578,13 @@ function _onMouseDown(e){
   _t0 = raw; _moved = false;
 
   if(hitBox(pt) && !S.connectMode) return;
+  if(hitWall(pt) && !S.connectMode) return;
 
-  const room = hitRoom(pt);
+  const room = hitRoomDragZone(pt);
   if(room && !S.connectMode){
     _drag = { room, sx:pt.x, sy:pt.y, origX:room.x, origY:room.y };
-    _lpTimer = setTimeout(()=>{ if(!_moved){ _drag=null; promptEditRoom(room.id); } }, LONG_PRESS_MS);
+    S.dragRoomId = room.id;
+    _lpTimer = setTimeout(()=>{ if(!_moved){ S.dragRoomId=null; S.snapGuides=[]; _drag=null; promptEditRoom(room.id); } }, LONG_PRESS_MS);
     return;
   }
   _pan = { vpX:S.vp.x, vpY:S.vp.y, sx:raw.x, sy:raw.y };
@@ -1574,7 +1601,8 @@ function _onMouseMove(e){
     const pt    = _canvas(raw);
     _drag.room.x = _drag.origX + (pt.x - _drag.sx);
     _drag.room.y = _drag.origY + (pt.y - _drag.sy);
-    snapRoom(_drag.room); render(); return;
+    S.snapGuides = snapRoom(_drag.room);
+    render(); return;
   }
   if(_pan){
     S.vp.x = _pan.vpX + (raw.x - _pan.sx);
@@ -1585,7 +1613,8 @@ function _onMouseMove(e){
 
 function _onMouseUp(e){
   clearTimeout(_lpTimer);
-  if(_drag && _moved) saveState();
+  const wasDragging = !!(_drag && _moved);
+  if(wasDragging) saveState();
 
   if(!_moved && _t0){
     const pt  = _canvas(_raw(e));
@@ -1597,6 +1626,7 @@ function _onMouseUp(e){
     if(!S.connectMode){ setToolbarDefault(); render(); }
   }
   _reset();
+  if(wasDragging) render();
 }
 
 function _onWheel(e){

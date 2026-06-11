@@ -269,32 +269,66 @@ function hitRoom(pt){
   }
   return null;
 }
+
+function hitRoomDragZone(pt){
+  const margin = ROOM_DRAG_MARGIN / S.vp.scale;
+  for(let i=S.rooms.length-1;i>=0;i--){
+    const r=S.rooms[i];
+    if(pt.x<r.x||pt.x>r.x+r.wPx||pt.y<r.y||pt.y>r.y+r.hPx) continue;
+    const inset=Math.min(margin, r.wPx*0.28, r.hPx*0.28);
+    if(pt.x>=r.x+inset&&pt.x<=r.x+r.wPx-inset&&pt.y>=r.y+inset&&pt.y<=r.y+r.hPx-inset) return r;
+  }
+  return null;
+}
+
+function intervalGap(a1,a2,b1,b2){
+  if(a2<b1) return b1-a2;
+  if(b2<a1) return a1-b2;
+  return 0;
+}
+
+function roomsNearX(a,b){
+  return intervalGap(a.x,a.x+a.wPx,b.x,b.x+b.wPx) <= SNAP_NEAR_PX;
+}
+
+function roomsNearY(a,b){
+  return intervalGap(a.y,a.y+a.hPx,b.y,b.y+b.hPx) <= SNAP_NEAR_PX;
+}
+
 function snapRoom(room){
   const guides=[];
   for(const o of S.rooms){
     if(o.id===room.id) continue;
-    // Horizontal snaps (x-axis)
-    const pairs=[
-      // right edge of room → left edge of other
-      {myEdge:room.x+room.wPx, otherEdge:o.x,        set:()=>{ room.x=o.x-room.wPx }, axis:'v', val:o.x},
-      // left edge of room → right edge of other
-      {myEdge:room.x,           otherEdge:o.x+o.wPx,  set:()=>{ room.x=o.x+o.wPx },   axis:'v', val:o.x+o.wPx},
-      // bottom edge of room → top edge of other
-      {myEdge:room.y+room.hPx, otherEdge:o.y,         set:()=>{ room.y=o.y-room.hPx }, axis:'h', val:o.y},
-      // top edge of room → bottom edge of other
-      {myEdge:room.y,           otherEdge:o.y+o.hPx,  set:()=>{ room.y=o.y+o.hPx },   axis:'h', val:o.y+o.hPx},
-    ];
-    for(const p of pairs){
-      if(Math.abs(p.myEdge-p.otherEdge)<SNAP_PX){
-        p.set();
-        guides.push({axis:p.axis, val:p.val});
+
+    if(roomsNearY(room,o)){
+      const xPairs=[
+        {myEdge:room.x+room.wPx, otherEdge:o.x,       set:()=>{ room.x=o.x-room.wPx }, axis:'v', val:o.x},
+        {myEdge:room.x,          otherEdge:o.x+o.wPx, set:()=>{ room.x=o.x+o.wPx },    axis:'v', val:o.x+o.wPx},
+      ];
+      for(const p of xPairs){
+        if(Math.abs(p.myEdge-p.otherEdge)<=SNAP_PX){
+          p.set();
+          guides.push({axis:p.axis, val:p.val});
+        }
       }
+      if(Math.abs(room.y-o.y)<=SNAP_PX) room.y=o.y;
+      if(Math.abs(room.y+room.hPx-(o.y+o.hPx))<=SNAP_PX) room.y=o.y+o.hPx-room.hPx;
     }
-    // Alignment snaps (after edge snap)
-    if(Math.abs(room.x-o.x)<SNAP_PX)         room.x=o.x;
-    if(Math.abs(room.y-o.y)<SNAP_PX)         room.y=o.y;
-    if(Math.abs(room.x+room.wPx-(o.x+o.wPx))<SNAP_PX) room.x=o.x+o.wPx-room.wPx;
-    if(Math.abs(room.y+room.hPx-(o.y+o.hPx))<SNAP_PX) room.y=o.y+o.hPx-room.hPx;
+
+    if(roomsNearX(room,o)){
+      const yPairs=[
+        {myEdge:room.y+room.hPx, otherEdge:o.y,        set:()=>{ room.y=o.y-room.hPx }, axis:'h', val:o.y},
+        {myEdge:room.y,          otherEdge:o.y+o.hPx,  set:()=>{ room.y=o.y+o.hPx },    axis:'h', val:o.y+o.hPx},
+      ];
+      for(const p of yPairs){
+        if(Math.abs(p.myEdge-p.otherEdge)<=SNAP_PX){
+          p.set();
+          guides.push({axis:p.axis, val:p.val});
+        }
+      }
+      if(Math.abs(room.x-o.x)<=SNAP_PX) room.x=o.x;
+      if(Math.abs(room.x+room.wPx-(o.x+o.wPx))<=SNAP_PX) room.x=o.x+o.wPx-room.wPx;
+    }
   }
   // Clamp to canvas
   room.x=Math.max(0,room.x); room.y=Math.max(0,room.y);

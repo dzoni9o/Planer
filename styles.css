@@ -174,7 +174,8 @@ select.fi{cursor:pointer}
 }
 
 /* ── SVG ELEMENTS ── */
-.room-bg{fill:rgba(255,255,255,.02)}
+.room-bg{fill:rgba(255,255,255,.02);cursor:grab}
+.room-bg.dragging{fill:rgba(90,159,212,.08);cursor:grabbing}
 .room-label{fill:#5a6a54;font-size:11px;font-family:'Space Mono',monospace;text-anchor:middle;pointer-events:none;dominant-baseline:middle}
 .room-dim{fill:#3a4a34;font-size:9px;font-family:'Space Mono',monospace;text-anchor:middle;pointer-events:none;dominant-baseline:middle}
 .wall{stroke:#2e3a2e;stroke-width:3;fill:none;stroke-linecap:square}
