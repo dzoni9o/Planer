@@ -1436,6 +1436,8 @@ let _moved  = false;
 let _t0     = null;  // raw screen {x,y} pri touchstart
 let _lpTimer= null;
 let _activePointerId = null;
+let _pointers = new Map();
+let _multiTouch = null;
 
 const MOVE_THRESH   = 8;
 const LONG_PRESS_MS = 550;
@@ -1449,6 +1451,53 @@ function _raw(e){
   return { x: s.clientX - r.left, y: s.clientY - r.top };
 }
 function _canvas(raw){ return screenToCanvas(raw.x, raw.y); }
+
+function _pointerRaw(e){
+  const r = document.getElementById('svg').getBoundingClientRect();
+  return { x:e.clientX-r.left, y:e.clientY-r.top, type:e.pointerType };
+}
+
+function _rememberPointer(e){ _pointers.set(e.pointerId, _pointerRaw(e)); }
+function _forgetPointer(e){ _pointers.delete(e.pointerId); }
+function _touchPointerList(){ return [..._pointers.values()].filter(p=>p.type==='touch'); }
+function _midPoint(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
+function _pointDist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+function _beginMultiTouch(){
+  const pts=_touchPointerList();
+  if(pts.length<2) return false;
+  const [a,b]=pts;
+  const mid=_midPoint(a,b);
+  if(_drag && _moved) saveState();
+  clearTimeout(_lpTimer);
+  S.dragRoomId=null;
+  S.snapGuides=[];
+  _drag=_pan=_t0=null;
+  _moved=true;
+  _activePointerId=null;
+  _multiTouch={
+    startDist:Math.max(1,_pointDist(a,b)),
+    startScale:S.vp.scale,
+    canvasAtMid:screenToCanvas(mid.x, mid.y),
+  };
+  render();
+  return true;
+}
+
+function _updateMultiTouch(){
+  const pts=_touchPointerList();
+  if(pts.length<2 || !_multiTouch) return false;
+  const [a,b]=pts;
+  const mid=_midPoint(a,b);
+  const dist=Math.max(1,_pointDist(a,b));
+  const scale=Math.min(VP_MAX, Math.max(VP_MIN, _multiTouch.startScale * (dist / _multiTouch.startDist)));
+  S.vp.scale=scale;
+  S.vp.x=mid.x - _multiTouch.canvasAtMid.x * scale;
+  S.vp.y=mid.y - _multiTouch.canvasAtMid.y * scale;
+  applyVP();
+  showZoomBadge();
+  return true;
+}
 
 function _startCanvasGesture(e){
   const raw = _raw(e);
@@ -1524,29 +1573,49 @@ function _finishCanvasGesture(e){
 function _onPointerDown(e){
   if(e.pointerType==='mouse' && e.button!==0) return;
   e.preventDefault();
-  _cancelGesture();
-  _activePointerId = e.pointerId;
+  if(_pointers.size===0) _cancelGesture();
   try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch {}
+  _rememberPointer(e);
+  if(e.pointerType==='touch' && _touchPointerList().length>=2){
+    _beginMultiTouch();
+    return;
+  }
+  _activePointerId = e.pointerId;
   _startCanvasGesture(e);
 }
 
 function _onPointerMove(e){
-  if(_activePointerId!==e.pointerId) return;
   e.preventDefault();
+  if(_pointers.has(e.pointerId)) _rememberPointer(e);
+  if(_multiTouch){
+    _updateMultiTouch();
+    return;
+  }
+  if(_activePointerId!==e.pointerId) return;
   _moveCanvasGesture(e);
 }
 
 function _onPointerUp(e){
-  if(_activePointerId!==e.pointerId) return;
   e.preventDefault();
   try { e.currentTarget.releasePointerCapture?.(e.pointerId); } catch {}
+  if(_multiTouch){
+    _forgetPointer(e);
+    _cancelGesture();
+    return;
+  }
+  if(_activePointerId!==e.pointerId){
+    _forgetPointer(e);
+    return;
+  }
   _lastTouchEnd = Date.now();
   _finishCanvasGesture(e);
+  _forgetPointer(e);
 }
 
 function _onPointerCancel(e){
   if(_activePointerId!==null && _activePointerId!==e.pointerId) return;
   try { e.currentTarget?.releasePointerCapture?.(e.pointerId); } catch {}
+  _forgetPointer(e);
   _cancelGesture(e);
 }
 
@@ -1681,6 +1750,8 @@ function _reset(){
   S.snapGuides = [];
   _drag = _pan = _pinch = _t0 = null; _moved = false;
   _activePointerId = null;
+  _multiTouch = null;
+  _pointers.clear();
 }
 
 // ── MOUSE (desktop) ──────────────────────────────────────
