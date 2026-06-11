@@ -151,10 +151,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .wall-preview-scroll{
   margin-bottom:14px;overflow:auto;border:1px solid var(--border2);
   border-radius:10px;background:var(--bg);max-height:62vh;
-  -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;
+  -webkit-overflow-scrolling:touch;touch-action:none;cursor:grab;
 }
-.wall-preview-stage{width:100%;min-width:100%;transition:width .12s ease;transform-origin:top left}
-.wall-preview-svg{min-width:980px}
+.wall-preview-scroll:active{cursor:grabbing}
+.wall-preview-stage{width:980px;min-width:980px;transition:width .08s ease;transform-origin:top left}
+.wall-preview-svg{min-width:100%}
 
 /* Form */
 .fg{display:flex;flex-direction:column;gap:6px;flex:1}

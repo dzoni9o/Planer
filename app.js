@@ -1190,17 +1190,95 @@ function onBoxTap(eid){
   openKonfigurator(eid);
 }
 
-function setWallPreviewZoom(action){
+function setWallPreviewZoom(action, focus){
   const stage=document.getElementById('wall-preview-stage');
+  const scroll=document.getElementById('wall-preview-scroll');
   const label=document.getElementById('wall-preview-zoom-label');
   if(!stage) return;
-  let z=parseFloat(stage.dataset.zoom||'1')||1;
+  const svg=stage.querySelector('.wall-preview-svg');
+  const baseW=Number(stage.dataset.baseWidth)||Number(svg?.getAttribute('viewBox')?.split(' ')[2])||980;
+  stage.dataset.baseWidth=String(baseW);
+  const oldZ=parseFloat(stage.dataset.zoom||'1')||1;
+  let z=oldZ;
   if(action==='reset') z=1;
   else z*=Number(action)||1;
-  z=Math.max(0.75, Math.min(3, z));
+  z=Math.max(0.5, Math.min(4, z));
+  const oldW=stage.scrollWidth||1;
+  const oldH=stage.scrollHeight||1;
+  const sr=scroll?.getBoundingClientRect();
+  const focusX=focus?.x ?? (sr ? sr.width/2 : oldW/2);
+  const focusY=focus?.y ?? (sr ? sr.height/2 : oldH/2);
+  const relX=scroll ? (scroll.scrollLeft+focusX)/oldW : 0.5;
+  const relY=scroll ? (scroll.scrollTop+focusY)/oldH : 0.5;
   stage.dataset.zoom=String(z);
-  stage.style.width=(z*100)+'%';
+  stage.style.width=(baseW*z)+'px';
   if(label) label.textContent=Math.round(z*100)+'%';
+  if(scroll){
+    requestAnimationFrame(()=>{
+      scroll.scrollLeft=(stage.scrollWidth*relX)-focusX;
+      scroll.scrollTop=(stage.scrollHeight*relY)-focusY;
+    });
+  }
+}
+
+function initWallPreviewInteractions(){
+  const scroll=document.getElementById('wall-preview-scroll');
+  const stage=document.getElementById('wall-preview-stage');
+  if(!scroll||!stage) return;
+  scroll.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const r=scroll.getBoundingClientRect();
+    const wheel=e.deltaMode===1 ? e.deltaY*16 : e.deltaY;
+    const factor=Math.exp(-wheel*0.0018);
+    setWallPreviewZoom(factor, {x:e.clientX-r.left, y:e.clientY-r.top});
+  }, {passive:false});
+
+  const points=new Map();
+  let pinch=null;
+  let pan=null;
+  const pt=e=>{
+    const r=scroll.getBoundingClientRect();
+    return {x:e.clientX-r.left, y:e.clientY-r.top};
+  };
+  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  const mid=(a,b)=>({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
+  const end=e=>{
+    points.delete(e.pointerId);
+    if(points.size<2) pinch=null;
+  };
+  scroll.addEventListener('pointerdown', e=>{
+    if(e.pointerType!=='touch') return;
+    points.set(e.pointerId, pt(e));
+    if(points.size===1){
+      const p=pt(e);
+      pan={id:e.pointerId, x:p.x, y:p.y, left:scroll.scrollLeft, top:scroll.scrollTop};
+      try{ scroll.setPointerCapture(e.pointerId); }catch{}
+    }
+    if(points.size===2){
+      e.preventDefault();
+      pan=null;
+      const [a,b]=[...points.values()];
+      pinch={dist:Math.max(1,dist(a,b)), zoom:parseFloat(stage.dataset.zoom||'1')||1};
+      try{ scroll.setPointerCapture(e.pointerId); }catch{}
+    }
+  }, {passive:false});
+  scroll.addEventListener('pointermove', e=>{
+    if(e.pointerType!=='touch'||!points.has(e.pointerId)) return;
+    points.set(e.pointerId, pt(e));
+    if(points.size>=2&&pinch){
+      e.preventDefault();
+      const [a,b]=[...points.values()];
+      const factor=(pinch.zoom*(dist(a,b)/pinch.dist))/(parseFloat(stage.dataset.zoom||'1')||1);
+      setWallPreviewZoom(factor, mid(a,b));
+    } else if(pan&&pan.id===e.pointerId){
+      e.preventDefault();
+      const p=pt(e);
+      scroll.scrollLeft=pan.left-(p.x-pan.x);
+      scroll.scrollTop=pan.top-(p.y-pan.y);
+    }
+  }, {passive:false});
+  scroll.addEventListener('pointerup', end);
+  scroll.addEventListener('pointercancel', end);
 }
 
 function showWallPreview(){
@@ -1249,12 +1327,20 @@ function showWallPreview(){
 
   const COL_WALL = '#8aa082';
 
-  let svg = `<svg class="wall-preview-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H+190}" style="width:100%;background:#111811;border-radius:8px;display:block">`;
+  let svg = `<svg class="wall-preview-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H+210}" style="width:100%;background:#10160f;border-radius:10px;display:block">
+    <defs>
+      <pattern id="wall-grid" width="35" height="35" patternUnits="userSpaceOnUse">
+        <path d="M35 0H0V35" fill="none" stroke="#263323" stroke-width="1" opacity=".75"/>
+      </pattern>
+    </defs>
+    <rect x="0" y="0" width="${W}" height="${H+210}" fill="#10160f"/>
+    <rect x="${PAD-24}" y="${ceilY-36}" width="${W-PAD*2+48}" height="${floorY-ceilY+122}" rx="12" fill="url(#wall-grid)" stroke="#31412f" stroke-width="1.2"/>`;
 
-  svg+=`<line x1="${PAD}" y1="${floorY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="4"/>`;
-  svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${W-PAD}" y2="${ceilY}"  stroke="${COL_WALL}" stroke-width="1.5" stroke-dasharray="5 4" opacity=".7"/>`;
-  svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${PAD}"   y2="${floorY}" stroke="${COL_WALL}" stroke-width="4"/>`;
-  svg+=`<line x1="${W-PAD}" y1="${ceilY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="4"/>`;
+  svg+=`<line x1="${PAD}" y1="${floorY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="6"/>`;
+  svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${W-PAD}" y2="${ceilY}"  stroke="${COL_WALL}" stroke-width="2" stroke-dasharray="8 6" opacity=".78"/>`;
+  svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${PAD}"   y2="${floorY}" stroke="${COL_WALL}" stroke-width="5"/>`;
+  svg+=`<line x1="${W-PAD}" y1="${ceilY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="5"/>`;
+  svg+=`<rect x="${W/2-190}" y="${ceilY-31}" width="380" height="25" rx="8" fill="#0b110b" stroke="#2f3f2d" stroke-width="1"/>`;
   svg+=`<text x="${W/2}" y="${ceilY-14}" text-anchor="middle" fill="#b7c3ad" font-size="13" font-weight="700" font-family="Space Mono,monospace">${svgText(r.name)} · Zid ${wall} · pogled iznutra</text>`;
   svg+=`<text x="${PAD+4}" y="${floorY+13}" text-anchor="start" fill="#9aaa91" font-size="9" font-weight="700" font-family="Space Mono,monospace">${leftLabel}</text>`;
   svg+=`<text x="${W-PAD-4}" y="${floorY+13}" text-anchor="end" fill="#9aaa91" font-size="9" font-weight="700" font-family="Space Mono,monospace">${rightLabel}</text>`;
@@ -1416,6 +1502,7 @@ function showWallPreview(){
     <div style="font-size:10px;color:var(--text3);margin-bottom:12px;font-family:var(--font)">visina: 2.70m pretpostavljena</div>
     <button class="btn btn-ghost" style="width:100%;justify-content:center" data-action="closeSheet">Zatvori</button>
   `);
+  initWallPreviewInteractions();
 }
 
 
