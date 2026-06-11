@@ -1114,6 +1114,20 @@ function onBoxTap(eid){
   if(S.connectMode){ onBoxTapConnect(eid); return; }
   openKonfigurator(eid);
 }
+
+function setWallPreviewZoom(action){
+  const stage=document.getElementById('wall-preview-stage');
+  const label=document.getElementById('wall-preview-zoom-label');
+  if(!stage) return;
+  let z=parseFloat(stage.dataset.zoom||'1')||1;
+  if(action==='reset') z=1;
+  else z*=Number(action)||1;
+  z=Math.max(0.75, Math.min(3, z));
+  stage.dataset.zoom=String(z);
+  stage.style.width=(z*100)+'%';
+  if(label) label.textContent=Math.round(z*100)+'%';
+}
+
 function showWallPreview(){
   if(!S.selWall) return;
   const {roomId, wall} = S.selWall;
@@ -1123,11 +1137,21 @@ function showWallPreview(){
   const lenM  = wallLenM(r, wall);
   const wallH = 2.7;
 
-  const PAD=40, W=600, H=200;
+  const PAD=58, W=820, H=300;
   const scaleX = (W-PAD*2)/lenM;
   const scaleY = (H-PAD*2)/wallH;
   const floorY = PAD+(H-PAD*2);
   const ceilY  = PAD;
+
+  const svgText = (value) => String(value ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+  const shortText = (value, max=20) => {
+    const s = String(value ?? '').trim();
+    return s.length > max ? s.slice(0, max-1) + '...' : s;
+  };
 
   // Pogled IZ SOBE — mirror horizontalne ose:
   // Zid N: gledam sjever, lijeva=zapad=start ugao W kraju → normalno
@@ -1150,13 +1174,13 @@ function showWallPreview(){
 
   const COL_WALL = 'var(--border2)';
 
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H+80}" style="width:100%;background:var(--bg);border-radius:8px;display:block">`;
+  let svg = `<svg class="wall-preview-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H+110}" style="width:100%;background:var(--bg);border-radius:8px;display:block">`;
 
   svg+=`<line x1="${PAD}" y1="${floorY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="3"/>`;
   svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${W-PAD}" y2="${ceilY}"  stroke="${COL_WALL}" stroke-width="1" stroke-dasharray="4 3" opacity=".4"/>`;
   svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${PAD}"   y2="${floorY}" stroke="${COL_WALL}" stroke-width="3"/>`;
   svg+=`<line x1="${W-PAD}" y1="${ceilY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="3"/>`;
-  svg+=`<text x="${W/2}" y="${ceilY-10}" text-anchor="middle" fill="var(--text3)" font-size="10" font-family="Space Mono,monospace">${r.name} · Zid ${wall} · pogled iznutra</text>`;
+  svg+=`<text x="${W/2}" y="${ceilY-14}" text-anchor="middle" fill="var(--text3)" font-size="12" font-family="Space Mono,monospace">${svgText(r.name)} · Zid ${wall} · pogled iznutra</text>`;
   svg+=`<text x="${PAD+4}" y="${floorY+11}" text-anchor="start" fill="var(--text3)" font-size="8" font-family="Space Mono,monospace">${leftLabel}</text>`;
   svg+=`<text x="${W-PAD-4}" y="${floorY+11}" text-anchor="end" fill="var(--text3)" font-size="8" font-family="Space Mono,monospace">${rightLabel}</text>`;
 
@@ -1259,9 +1283,16 @@ function showWallPreview(){
     svg+=`<text x="${cx}" y="${ry-4}" text-anchor="middle" fill="${st.color}" font-size="8" font-family="Space Mono,monospace" font-weight="bold">${b.code}</text>`;
     if(cap>=3&&moduli.length===0)
       svg+=`<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" fill="${st.color}" font-size="7" font-family="Space Mono,monospace" opacity=".5">${cap}M</text>`;
-    if(moduli.length>0){
-      const kb=KAT_BOJE[moduli[0].kat]||KAT_BOJE.ostalo;
-      svg+=`<text x="${cx}" y="${ry+bH+9}" text-anchor="middle" fill="${kb.color}" font-size="7" font-family="Space Mono,monospace">${moduli.length===1?moduli[0].naziv.slice(0,14):zauzetM(b)+'/'+cap+'M'}</text>`;
+    const moduleRows = moduli.length
+      ? moduli.map(m=>({text:`${m.kod || ''} ${shortText(m.naziv, 24)}`.trim(), color:(KAT_BOJE[m.kat]||KAT_BOJE.ostalo).color}))
+      : [{text:`prazno ${cap}M`, color:'var(--text3)'}];
+    const listY = ry+bH+12;
+    svg+=`<rect x="${cx-54}" y="${listY-8}" width="108" height="${Math.min(moduleRows.length,5)*10+8}" rx="4" fill="var(--bg)" opacity=".92"/>`;
+    moduleRows.slice(0,5).forEach((row,i)=>{
+      svg+=`<text x="${cx}" y="${listY+i*10}" text-anchor="middle" fill="${row.color}" font-size="7.5" font-family="Space Mono,monospace">${svgText(row.text)}</text>`;
+    });
+    if(moduleRows.length>5){
+      svg+=`<text x="${cx}" y="${listY+50}" text-anchor="middle" fill="var(--text3)" font-size="7" font-family="Space Mono,monospace">+${moduleRows.length-5} mod.</text>`;
     }
 
     // Horizontal offset kota — below floor line, alternating rows
@@ -1276,8 +1307,15 @@ function showWallPreview(){
 
   svg+=`</svg>`;
   openSheet(`
-    <div class="sheet-title">📐 ${r.name} · Zid ${wall}</div>
-    <div style="margin-bottom:14px">${svg}</div>
+    <div class="sheet-title">Pregled zida - ${svgText(r.name)} - Zid ${wall}</div>
+    <div class="wall-preview-toolbar">
+      <button class="btn btn-ghost btn-icon" onclick="setWallPreviewZoom(0.8)" title="Umanji">-</button>
+      <button class="btn btn-ghost" id="wall-preview-zoom-label" onclick="setWallPreviewZoom('reset')" title="Vrati zoom">100%</button>
+      <button class="btn btn-ghost btn-icon" onclick="setWallPreviewZoom(1.25)" title="Uvecaj">+</button>
+    </div>
+    <div class="wall-preview-scroll" id="wall-preview-scroll">
+      <div class="wall-preview-stage" id="wall-preview-stage" data-zoom="1">${svg}</div>
+    </div>
     <div style="font-size:10px;color:var(--text3);margin-bottom:12px;font-family:var(--font)">visina: 2.70m pretpostavljena</div>
     <button class="btn btn-ghost" style="width:100%;justify-content:center" data-action="closeSheet">Zatvori</button>
   `);

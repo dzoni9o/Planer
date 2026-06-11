@@ -146,6 +146,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   margin-bottom:18px;font-family:var(--sans);
 }
 .sheet-actions{display:flex;gap:8px;margin-top:20px}
+.wall-preview-toolbar{display:flex;justify-content:center;align-items:center;gap:8px;margin:-6px 0 10px}
+.wall-preview-toolbar #wall-preview-zoom-label{min-width:72px;justify-content:center;font-family:var(--font);font-size:12px}
+.wall-preview-scroll{
+  margin-bottom:14px;overflow:auto;border:1px solid var(--border2);
+  border-radius:10px;background:var(--bg);max-height:58vh;
+  -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;
+}
+.wall-preview-stage{width:100%;min-width:100%;transition:width .12s ease;transform-origin:top left}
+.wall-preview-svg{min-width:820px}
 
 /* Form */
 .fg{display:flex;flex-direction:column;gap:6px;flex:1}
