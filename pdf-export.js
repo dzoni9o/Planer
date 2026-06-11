@@ -72,6 +72,20 @@ class PdfWriter {
     }
   }
 
+  poly(points, stroke = "#111111", fill = null, width = 1) {
+    if (!points.length) return;
+    this.stroke(stroke);
+    this.cmd(`${width} w`);
+    if (fill) this.fill(fill);
+    const [first, ...rest] = points;
+    let path = `${first.x.toFixed(2)} ${this.y(first.y).toFixed(2)} m`;
+    rest.forEach((point) => {
+      path += ` ${point.x.toFixed(2)} ${this.y(point.y).toFixed(2)} l`;
+    });
+    path += " h";
+    this.cmd(`${path} ${fill ? "B" : "S"}`);
+  }
+
   text(value, x, y, size = 10, hex = "#111111", bold = false, align = "left") {
     this.fill(hex);
     const text = asciiPdfText(value);
@@ -221,6 +235,10 @@ function projectPdfInfo() {
   return { boxes, doors, windows, cableM, areaM2 };
 }
 
+function projectPdfName() {
+  return localStorage.getItem("nikvolt_project_name") || "NikVolt projekat";
+}
+
 function drawHeader(pdf, title, subtitle = "") {
   pdf.rect(0, 0, pdf.w, 64, "#111827", "#111827", 0.1);
   pdf.text("NIKVOLT", 34, 25, 10, "#e8c44a", true);
@@ -238,6 +256,128 @@ function drawInfoCard(pdf, x, y, w, h, label, value, color = "#111827") {
   pdf.rect(x, y, w, h, "#e5e7eb", "#f8fafc", 0.5);
   pdf.text(label, x + 10, y + 15, 7, "#64748b", true);
   pdf.text(value, x + 10, y + 36, 15, color, true);
+}
+
+function projectBounds() {
+  if (!S.rooms.length) return { minX: 0, minY: 0, maxX: 1, maxY: 1, w: 1, h: 1 };
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  S.rooms.forEach((room) => {
+    minX = Math.min(minX, room.x);
+    minY = Math.min(minY, room.y);
+    maxX = Math.max(maxX, room.x + room.wPx);
+    maxY = Math.max(maxY, room.y + room.hPx);
+  });
+  return { minX, minY, maxX, maxY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) };
+}
+
+function fitProjectToBox(x, y, w, h, pad = 18) {
+  const bounds = projectBounds();
+  const scale = Math.min((w - pad * 2) / bounds.w, (h - pad * 2) / bounds.h);
+  const ox = x + (w - bounds.w * scale) / 2 - bounds.minX * scale;
+  const oy = y + (h - bounds.h * scale) / 2 - bounds.minY * scale;
+  return { bounds, scale, ox, oy };
+}
+
+function roomColor(index) {
+  const palette = ["#eef7ef", "#eef5ff", "#fff7e6", "#f7efff", "#eefaf7", "#fff1f1"];
+  return palette[index % palette.length];
+}
+
+function drawPdfTopPlan(pdf, x, y, w, h) {
+  const fit = fitProjectToBox(x, y, w, h, 22);
+  pdf.rect(x, y, w, h, "#d1d5db", "#ffffff", 0.8);
+  pdf.rect(x, y, w, 26, "#f1f5f9", "#f1f5f9", 0.1);
+  pdf.text("Tlocrt kuce - pticija perspektiva", x + 12, y + 17, 10, "#111827", true);
+
+  S.rooms.forEach((room, index) => {
+    const rx = fit.ox + room.x * fit.scale;
+    const ry = fit.oy + room.y * fit.scale;
+    const rw = room.wPx * fit.scale;
+    const rh = room.hPx * fit.scale;
+    pdf.rect(rx, ry, rw, rh, "#334155", roomColor(index), 1.4);
+    pdf.text(room.name || `Prostorija ${index + 1}`, rx + rw / 2, ry + rh / 2 - 5, 8, "#111827", true, "center");
+    pdf.text(`${room.wM} x ${room.hM} m`, rx + rw / 2, ry + rh / 2 + 8, 7, "#64748b", false, "center");
+  });
+
+  S.elements.forEach((element) => {
+    const p = element.type === "box" ? elemPx(element) : elemWallPx(element);
+    if (!p) return;
+    const px = fit.ox + p.x * fit.scale;
+    const py = fit.oy + p.y * fit.scale;
+    if (element.type === "box") {
+      const status = BOX_STATUS[element.status] || BOX_STATUS.nova;
+      pdf.rect(px - 3, py - 3, 6, 6, status.color, "#ffffff", 0.8);
+      pdf.text(element.code || "", px + 5, py - 4, 5.5, status.color, true);
+    } else if (element.type === "door") {
+      pdf.line(px - 5, py, px + 5, py, "#d4882a", 1.4);
+    } else if (element.type === "window") {
+      pdf.line(px - 5, py, px + 5, py, "#5a9fd4", 1.4);
+    }
+  });
+
+  S.connections.forEach((connection) => {
+    const a = S.elements.find((element) => element.id === connection.aId);
+    const b = S.elements.find((element) => element.id === connection.bId);
+    if (!a || !b) return;
+    const pA = elemPx(a), pB = elemPx(b);
+    if (!pA || !pB) return;
+    const color = connection.kabl?.boja || "#d97706";
+    pdf.line(fit.ox + pA.x * fit.scale, fit.oy + pA.y * fit.scale, fit.ox + pB.x * fit.scale, fit.oy + pB.y * fit.scale, color, 0.5, "2 2");
+  });
+}
+
+function drawPdf3DPlan(pdf, x, y, w, h) {
+  const fit = fitProjectToBox(x, y, w, h, 34);
+  const wallLift = 0.3 * PX_PER_M * fit.scale;
+  const isoX = (px, py) => x + w / 2 + ((px - fit.bounds.minX) - (py - fit.bounds.minY)) * fit.scale * 0.74;
+  const isoY = (px, py) => y + 48 + ((px - fit.bounds.minX) + (py - fit.bounds.minY)) * fit.scale * 0.36;
+  const projectPts = [
+    { x: fit.bounds.minX, y: fit.bounds.minY },
+    { x: fit.bounds.maxX, y: fit.bounds.minY },
+    { x: fit.bounds.maxX, y: fit.bounds.maxY },
+    { x: fit.bounds.minX, y: fit.bounds.maxY },
+  ].map((p) => ({ x: isoX(p.x, p.y), y: isoY(p.x, p.y) + wallLift }));
+  const minIsoX = Math.min(...projectPts.map((p) => p.x));
+  const maxIsoX = Math.max(...projectPts.map((p) => p.x));
+  const maxIsoY = Math.max(...projectPts.map((p) => p.y));
+  const shiftX = x + w / 2 - (minIsoX + maxIsoX) / 2;
+  const shiftY = y + h - 30 - maxIsoY;
+  const iso = (px, py, z = 0) => ({ x: isoX(px, py) + shiftX, y: isoY(px, py) + shiftY - z });
+
+  pdf.rect(x, y, w, h, "#d1d5db", "#ffffff", 0.8);
+  pdf.rect(x, y, w, 26, "#f1f5f9", "#f1f5f9", 0.1);
+  pdf.text("Prostorni prikaz - zidovi 30cm", x + 12, y + 17, 10, "#111827", true);
+
+  S.rooms.forEach((room, index) => {
+    const floor = [
+      iso(room.x, room.y, 0),
+      iso(room.x + room.wPx, room.y, 0),
+      iso(room.x + room.wPx, room.y + room.hPx, 0),
+      iso(room.x, room.y + room.hPx, 0),
+    ];
+    const top = [
+      iso(room.x, room.y, wallLift),
+      iso(room.x + room.wPx, room.y, wallLift),
+      iso(room.x + room.wPx, room.y + room.hPx, wallLift),
+      iso(room.x, room.y + room.hPx, wallLift),
+    ];
+    pdf.poly(floor, "#cbd5e1", roomColor(index), 0.6);
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4;
+      pdf.poly([floor[i], floor[j], top[j], top[i]], "#64748b", i % 2 ? "#dbe6d8" : "#e8efe5", 0.6);
+    }
+    pdf.poly(top, "#334155", null, 1.1);
+    const center = iso(room.x + room.wPx / 2, room.y + room.hPx / 2, wallLift + 7);
+    pdf.text(room.name || `Prostorija ${index + 1}`, center.x, center.y, 6.5, "#111827", true, "center");
+  });
+}
+
+function drawPdfPlanPage(pdf) {
+  pdf.addPage();
+  drawHeader(pdf, "Nacrt kuce", "tlocrt + 3D ugao");
+  drawPdfTopPlan(pdf, 34, 88, pdf.w - 68, 315);
+  drawPdf3DPlan(pdf, 34, 438, pdf.w - 68, 330);
+  drawFooter(pdf);
 }
 
 function drawPdfWall(pdf, room, wall, x, y, w, h) {
@@ -402,30 +542,37 @@ function exportPdf() {
   const pdf = new PdfWriter();
   const info = projectPdfInfo();
   pdf.addPage();
-  drawHeader(pdf, "Plan elektro instalacije", "vektorski PDF izvestaj");
-  pdf.text("Osnovne informacije o projektu", 34, 96, 14, "#111827", true);
-  pdf.text("Izvestaj je generisan lokalno iz NikVolt planera. Zidovi, dozne, kablovi i tekst su PDF vektori.", 34, 116, 9, "#475569");
+  const projectName = projectPdfName();
+  drawHeader(pdf, projectName, "elektro plan");
+  pdf.text("Plan elektro instalacije", 34, 104, 24, "#111827", true);
+  pdf.text("Vektorski PDF izvestaj iz NikVolt planera", 34, 128, 11, "#475569");
+  pdf.text("Projektni podaci", 34, 176, 13, "#111827", true);
 
-  const cardY = 148;
+  const cardY = 202;
   const cardW = 118;
   drawInfoCard(pdf, 34, cardY, cardW, 58, "PROSTORIJE", `${S.rooms.length}`, "#111827");
   drawInfoCard(pdf, 162, cardY, cardW, 58, "POVRSINA", `${info.areaM2} m2`, "#2563eb");
   drawInfoCard(pdf, 290, cardY, cardW, 58, "DOZNE", `${info.boxes.length}`, "#16a34a");
   drawInfoCard(pdf, 418, cardY, cardW, 58, "KABLOVI", `${info.cableM} m`, "#d97706");
 
-  pdf.text(`Vrata: ${info.doors}   Prozori: ${info.windows}   Strujni krugovi: ${S.connections.length}`, 34, 232, 9, "#475569");
-  pdf.text("Sadrzaj", 34, 278, 13, "#111827", true);
+  pdf.text(`Vrata: ${info.doors}   Prozori: ${info.windows}   Strujni krugovi: ${S.connections.length}`, 34, 288, 9, "#475569");
+  pdf.text(`Datum izvoza: ${new Date().toLocaleDateString("sr-RS")}`, 34, 306, 9, "#475569");
+  pdf.text("Napomena: naziv projekta i dodatni podaci jos nisu definisani u aplikaciji; naslov se moze povezati kasnije.", 34, 330, 8, "#64748b");
+  pdf.text("Sadrzaj dokumenta", 34, 382, 13, "#111827", true);
 
-  let y = 304;
+  let y = 408;
+  pdf.text("1. Nacrt kuce - tlocrt i 3D ugao", 48, y, 10, "#111827", true);
+  y += 20;
   S.rooms.forEach((room, index) => {
     const summary = roomPdfSummary(room);
-    pdf.text(`${index + 1}. ${room.name}`, 48, y, 10, "#111827", true);
+    pdf.text(`${index + 2}. ${room.name}`, 48, y, 10, "#111827", true);
     pdf.text(`${room.wM} x ${room.hM} m | ${summary.boxes.length} dozni | ${summary.connections.length} kablova | ${summary.cableM} m`, 190, y, 8, "#64748b");
     y += 17;
   });
-  pdf.text(`${S.rooms.length + 1}. Spisak materijala`, 48, y + 6, 10, "#111827", true);
+  pdf.text(`${S.rooms.length + 2}. Spisak materijala`, 48, y + 6, 10, "#111827", true);
   drawFooter(pdf);
 
+  drawPdfPlanPage(pdf);
   S.rooms.forEach((room) => drawPdfRoom(pdf, room));
   drawPdfMaterials(pdf);
   pdf.save(`nikvolt-plan-${new Date().toISOString().slice(0, 10)}.pdf`);

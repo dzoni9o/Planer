@@ -1202,7 +1202,7 @@ function setWallPreviewZoom(action, focus){
   let z=oldZ;
   if(action==='reset') z=1;
   else z*=Number(action)||1;
-  z=Math.max(0.5, Math.min(4, z));
+  z=Math.max(1, Math.min(4, z));
   const oldW=stage.scrollWidth||1;
   const oldH=stage.scrollHeight||1;
   const sr=scroll?.getBoundingClientRect();
