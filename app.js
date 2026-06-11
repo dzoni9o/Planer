@@ -976,9 +976,17 @@ function renderElements(){
       const ex=hx+(vx*0.7+nx*0.7)*wPx;
       const ey=hy+(vy*0.7+ny*0.7)*wPx;
       const sweep=(hingeIsEnd?0:1) ^ (el.swing==='out'?1:0);
-      eHtml+=`<line class="door-body" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--amber)" stroke-width="3"/>`;
+      const jamb=7;
+      const jx=(p.nx||0)*jamb, jy=(p.ny||0)*jamb;
+      const kx=hx+(ex-hx)*0.82, ky=hy+(ey-hy)*0.82;
+      eHtml+=`<line class="door-gap" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+      eHtml+=`<line class="door-body" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+      eHtml+=`<line class="door-jamb" x1="${x1-jx}" y1="${y1-jy}" x2="${x1+jx}" y2="${y1+jy}"/>`;
+      eHtml+=`<line class="door-jamb" x1="${x2-jx}" y1="${y2-jy}" x2="${x2+jx}" y2="${y2+jy}"/>`;
       eHtml+=`<path class="door-swing" d="M${hx},${hy} A${wPx},${wPx} 0 0,${sweep} ${ex},${ey}"/>`;
       eHtml+=`<line class="door-leaf" x1="${hx}" y1="${hy}" x2="${ex}" y2="${ey}"/>`;
+      eHtml+=`<circle class="door-hinge" cx="${hx}" cy="${hy}" r="3.2"/>`;
+      eHtml+=`<circle class="door-knob" cx="${kx}" cy="${ky}" r="2"/>`;
     } else if(el.type==='window'){
       const wPx=(el.widthM||1.2)*PX_PER_M;
       const hw=wPx/2;
