@@ -1435,6 +1435,7 @@ let _pinch  = null;  // {dist}
 let _moved  = false;
 let _t0     = null;  // raw screen {x,y} pri touchstart
 let _lpTimer= null;
+let _activePointerId = null;
 
 const MOVE_THRESH   = 8;
 const LONG_PRESS_MS = 550;
@@ -1448,6 +1449,106 @@ function _raw(e){
   return { x: s.clientX - r.left, y: s.clientY - r.top };
 }
 function _canvas(raw){ return screenToCanvas(raw.x, raw.y); }
+
+function _startCanvasGesture(e){
+  const raw = _raw(e);
+  const pt  = _canvas(raw);
+  _t0 = raw;
+  _moved = false;
+  clearTimeout(_lpTimer);
+
+  if(hitBox(pt) && !S.connectMode) return;
+  if(hitWall(pt) && !S.connectMode) return;
+
+  const room = hitRoomDragZone(pt);
+  if(room && !S.connectMode){
+    _drag = { room, sx:pt.x, sy:pt.y, origX:room.x, origY:room.y };
+    S.dragRoomId = room.id;
+    _lpTimer = setTimeout(()=>{ if(!_moved){ S.dragRoomId=null; S.snapGuides=[]; _drag=null; promptEditRoom(room.id); } }, LONG_PRESS_MS);
+    return;
+  }
+
+  _pan = { vpX:S.vp.x, vpY:S.vp.y, sx:raw.x, sy:raw.y };
+}
+
+function _moveCanvasGesture(e){
+  if(!_t0) return;
+  const raw  = _raw(e);
+  const dist = Math.hypot(raw.x - _t0.x, raw.y - _t0.y);
+
+  if(dist > MOVE_THRESH){
+    _moved = true;
+    clearTimeout(_lpTimer);
+  }
+  if(!_moved) return;
+
+  if(_drag){
+    const pt = _canvas(raw);
+    _drag.room.x = _drag.origX + (pt.x - _drag.sx);
+    _drag.room.y = _drag.origY + (pt.y - _drag.sy);
+    S.snapGuides = snapRoom(_drag.room);
+    render();
+    return;
+  }
+
+  if(_pan){
+    S.vp.x = _pan.vpX + (raw.x - _pan.sx);
+    S.vp.y = _pan.vpY + (raw.y - _pan.sy);
+    applyVP();
+  }
+}
+
+function _finishCanvasGesture(e){
+  clearTimeout(_lpTimer);
+  const wasDragging = !!(_drag && _moved);
+  if(wasDragging){
+    saveState();
+    _reset();
+    render();
+    return;
+  }
+
+  if(!_moved && _t0){
+    const pt = _canvas(_raw(e));
+    const box = hitBox(pt);
+    if(box && !S.connectMode){ openKonfigurator(box.id); _reset(); return; }
+    if(box && S.connectMode){ onBoxTapConnect(box.id); _reset(); return; }
+    const wall = hitWall(pt);
+    if(wall && !S.connectMode){ onWallTap(wall.roomId, wall.wall); _reset(); return; }
+    if(!S.connectMode){ setToolbarDefault(); render(); }
+  }
+
+  _reset();
+}
+
+function _onPointerDown(e){
+  if(e.pointerType==='mouse' && e.button!==0) return;
+  e.preventDefault();
+  _cancelGesture();
+  _activePointerId = e.pointerId;
+  try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch {}
+  _startCanvasGesture(e);
+}
+
+function _onPointerMove(e){
+  if(_activePointerId!==e.pointerId) return;
+  e.preventDefault();
+  _moveCanvasGesture(e);
+}
+
+function _onPointerUp(e){
+  if(_activePointerId!==e.pointerId) return;
+  e.preventDefault();
+  try { e.currentTarget.releasePointerCapture?.(e.pointerId); } catch {}
+  _lastTouchEnd = Date.now();
+  _finishCanvasGesture(e);
+}
+
+function _onPointerCancel(e){
+  if(_activePointerId!==null && _activePointerId!==e.pointerId) return;
+  try { e.currentTarget?.releasePointerCapture?.(e.pointerId); } catch {}
+  _cancelGesture(e);
+}
 
 function _cancelGesture(e){
   if(e?.preventDefault) e.preventDefault();
@@ -1579,6 +1680,7 @@ function _reset(){
   S.dragRoomId = null;
   S.snapGuides = [];
   _drag = _pan = _pinch = _t0 = null; _moved = false;
+  _activePointerId = null;
 }
 
 // ── MOUSE (desktop) ──────────────────────────────────────
@@ -1652,14 +1754,11 @@ function _pinchDist(t){
 
 // ── Attach ───────────────────────────────────────────────
 const _cw = document.getElementById('canvas-wrap');
-_cw.addEventListener('touchstart', _onTouchStart, {passive:false});
-_cw.addEventListener('touchmove',  _onTouchMove,  {passive:false});
-_cw.addEventListener('touchend',   _onTouchEnd,   {passive:false});
-_cw.addEventListener('touchcancel', _cancelGesture, {passive:false});
-_cw.addEventListener('mousedown',  _onMouseDown);
-_cw.addEventListener('mousemove',  _onMouseMove);
-_cw.addEventListener('mouseup',    _onMouseUp);
-_cw.addEventListener('mouseleave', _cancelGesture);
+_cw.addEventListener('pointerdown', _onPointerDown);
+_cw.addEventListener('pointermove', _onPointerMove);
+_cw.addEventListener('pointerup', _onPointerUp);
+_cw.addEventListener('pointercancel', _onPointerCancel);
+_cw.addEventListener('lostpointercapture', _onPointerCancel);
 _cw.addEventListener('wheel',      _onWheel, {passive:false});
 
 // ── FIT + RESET ──────────────────────────────────────────
