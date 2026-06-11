@@ -486,8 +486,17 @@ function closeSheet(){
 }
 
 // Close on backdrop tap
-document.getElementById('sheet-bg').addEventListener('click', e=>{
-  if(e.target===document.getElementById('sheet-bg')) closeSheet();
+const sheetBackdrop=document.getElementById('sheet-bg');
+let sheetBackdropStarted=false;
+sheetBackdrop.addEventListener('pointerdown', e=>{
+  sheetBackdropStarted = e.target === sheetBackdrop;
+});
+sheetBackdrop.addEventListener('pointercancel', ()=>{
+  sheetBackdropStarted = false;
+});
+sheetBackdrop.addEventListener('click', e=>{
+  if(sheetBackdropStarted && e.target===sheetBackdrop) closeSheet();
+  sheetBackdropStarted = false;
 });
 
 // Swipe handle down to close
