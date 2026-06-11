@@ -1449,9 +1449,18 @@ function _raw(e){
 }
 function _canvas(raw){ return screenToCanvas(raw.x, raw.y); }
 
+function _cancelGesture(e){
+  if(e?.preventDefault) e.preventDefault();
+  const needsRender = !!(S.dragRoomId || S.snapGuides.length);
+  if(_drag && _moved) saveState();
+  _reset();
+  if(needsRender) render();
+}
+
 // ── TOUCHSTART ───────────────────────────────────────────
 function _onTouchStart(e){
   e.preventDefault(); // blokira scroll i ghost click
+  _cancelGesture();
 
   if(e.touches.length === 2){
     // Pinch
@@ -1566,13 +1575,15 @@ function _onTouchEnd(e){
 }
 
 function _reset(){
+  clearTimeout(_lpTimer);
   S.dragRoomId = null;
   S.snapGuides = [];
-  _drag = _pan = _t0 = null; _moved = false;
+  _drag = _pan = _pinch = _t0 = null; _moved = false;
 }
 
 // ── MOUSE (desktop) ──────────────────────────────────────
 function _onMouseDown(e){
+  _cancelGesture();
   const raw = _raw(e);
   const pt  = _canvas(raw);
   _t0 = raw; _moved = false;
@@ -1644,9 +1655,11 @@ const _cw = document.getElementById('canvas-wrap');
 _cw.addEventListener('touchstart', _onTouchStart, {passive:false});
 _cw.addEventListener('touchmove',  _onTouchMove,  {passive:false});
 _cw.addEventListener('touchend',   _onTouchEnd,   {passive:false});
+_cw.addEventListener('touchcancel', _cancelGesture, {passive:false});
 _cw.addEventListener('mousedown',  _onMouseDown);
 _cw.addEventListener('mousemove',  _onMouseMove);
 _cw.addEventListener('mouseup',    _onMouseUp);
+_cw.addEventListener('mouseleave', _cancelGesture);
 _cw.addEventListener('wheel',      _onWheel, {passive:false});
 
 // ── FIT + RESET ──────────────────────────────────────────
