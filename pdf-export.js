@@ -380,55 +380,141 @@ function drawPdfPlanPage(pdf) {
   drawFooter(pdf);
 }
 
+function modulePdfColor(module) {
+  return (KAT_BOJE[module.kat] || KAT_BOJE.ostalo).color || "#64748b";
+}
+
+function drawPdfBoxFace(pdf, box, cx, cy, w, h) {
+  const status = BOX_STATUS[box.status] || BOX_STATUS.nova;
+  const cap = Math.max(1, box.size || 1);
+  const modules = box.moduli || [];
+  pdf.rect(cx - w / 2, cy - h / 2, w, h, status.color, "#f8fafc", 1.2);
+  pdf.rect(cx - w / 2 + 2, cy - h / 2 + 2, w - 4, h - 4, "#cbd5e1", "#ffffff", 0.45);
+  for (let i = 1; i < cap; i++) {
+    const sx = cx - w / 2 + (i / cap) * w;
+    pdf.line(sx, cy - h / 2 + 3, sx, cy + h / 2 - 3, "#d1d5db", 0.35);
+  }
+  let pos = 0;
+  modules.forEach((module) => {
+    const mw = (module.vel || 1) / cap * (w - 4);
+    const mx = cx - w / 2 + 2 + (pos / cap) * (w - 4);
+    const color = modulePdfColor(module);
+    pdf.rect(mx + 1, cy - h / 2 + 4, Math.max(3, mw - 2), h - 8, color, color, 0.2);
+    pos += module.vel || 1;
+  });
+  pdf.text(box.code || "", cx, cy - h / 2 - 6, 6.8, status.color, true, "center");
+}
+
+function drawPdfModuleCallout(pdf, box, cx, y) {
+  const modules = box.moduli || [];
+  const cap = box.size || 1;
+  const rows = modules.length
+    ? modules.map((module) => `${module.kod || ""} ${module.naziv || ""}`.trim())
+    : [`prazno ${cap}M`];
+  const h = Math.min(rows.length, 3) * 8 + 8;
+  pdf.rect(cx - 50, y - 8, 100, h, "#d1d5db", "#ffffff", 0.45);
+  rows.slice(0, 3).forEach((row, index) => {
+    const module = modules[index];
+    pdf.text(shortPdfText(row, 28), cx, y + index * 8, 5.5, module ? modulePdfColor(module) : "#94a3b8", true, "center");
+  });
+  if (rows.length > 3) pdf.text(`+${rows.length - 3} mod.`, cx, y + 24, 5.3, "#64748b", true, "center");
+}
+
 function drawPdfWall(pdf, room, wall, x, y, w, h) {
   const lengthM = wallLengthM(room, wall) || 1;
   const wallHeightM = 2.8;
-  const scale = Math.min(w / lengthM, h / wallHeightM);
+  const headH = 22;
+  const padX = 24;
+  const padTop = 34;
+  const padBottom = 28;
+  const scale = Math.min((w - padX * 2) / lengthM, (h - padTop - padBottom) / wallHeightM);
   const ox = x + (w - lengthM * scale) / 2;
-  const base = y + h - 18;
+  const base = y + h - padBottom;
   const top = base - wallHeightM * scale;
+  const cableZone = top + 24;
 
-  pdf.rect(x, y, w, h, "#d1d5db", "#ffffff", 0.8);
-  pdf.rect(x, y, w, 22, "#f1f5f9", "#f1f5f9", 0.1);
-  pdf.text(`${wallLabel(wall)} / ${lengthM}m`, x + 10, y + 15, 9, "#111827", true);
-  pdf.text("vektorski prikaz zida", x + w - 10, y + 15, 7, "#64748b", false, "right");
-  pdf.line(ox, base, ox + lengthM * scale, base, "#202020", 1.2);
-  pdf.line(ox, top, ox + lengthM * scale, top, "#dddddd", 0.4, "2 3");
-  pdf.text("0m", ox, base + 11, 7, "#777777");
-  pdf.text(`${lengthM}m`, ox + lengthM * scale, base + 11, 7, "#777777", false, "right");
-  pdf.text("zona kablova", ox + lengthM * scale / 2, top - 5, 6, "#999999", false, "center");
+  pdf.rect(x, y, w, h, "#cbd5e1", "#ffffff", 0.8);
+  pdf.rect(x, y, w, headH, "#0f172a", "#0f172a", 0.1);
+  pdf.text(`${wallLabel(wall)} / ${lengthM}m`, x + 10, y + 15, 9, "#ffffff", true);
+  pdf.text("zidni pogled - dozne, moduli i kablovi", x + w - 10, y + 15, 7, "#cbd5e1", false, "right");
+  pdf.rect(ox - 10, top - 8, lengthM * scale + 20, base - top + 16, "#d8dfd6", "#fbfdf9", 0.6);
+  for (let gx = 0; gx <= lengthM; gx += 0.5) {
+    const px = ox + gx * scale;
+    pdf.line(px, top, px, base, "#edf2ea", 0.25);
+  }
+  for (let gy = 0.5; gy < wallHeightM; gy += 0.5) {
+    const py = base - gy * scale;
+    pdf.line(ox, py, ox + lengthM * scale, py, "#edf2ea", 0.25);
+  }
+  pdf.line(ox, base, ox + lengthM * scale, base, "#5f7559", 2.2);
+  pdf.line(ox, top, ox + lengthM * scale, top, "#94a38d", 0.8, "5 4");
+  pdf.line(ox, cableZone, ox + lengthM * scale, cableZone, "#94a3b8", 0.6, "3 3");
+  pdf.text("zona razvoda", ox + lengthM * scale / 2, cableZone - 5, 5.8, "#64748b", false, "center");
+  pdf.text("0m", ox, base + 12, 6.5, "#64748b");
+  pdf.text(`${lengthM}m`, ox + lengthM * scale, base + 12, 6.5, "#64748b", false, "right");
 
   const wallElements = S.elements
     .filter((element) => element.roomId === room.id && element.wall === wall)
     .sort((a, b) => elementWallOffsetM(room, a) - elementWallOffsetM(room, b));
+  const wallBoxes = wallElements.filter((element) => element.type === "box");
+
+  let cableLane = 0;
+  S.connections.forEach((connection) => {
+    const a = S.elements.find((element) => element.id === connection.aId);
+    const b = S.elements.find((element) => element.id === connection.bId);
+    if (!a || !b) return;
+    const aOn = a.roomId === room.id && a.wall === wall && a.type === "box";
+    const bOn = b.roomId === room.id && b.wall === wall && b.type === "box";
+    if (!aOn && !bOn) return;
+    const color = connection.kabl?.boja || "#d97706";
+    const laneY = cableZone + cableLane * 9;
+    cableLane += 1;
+    const onA = aOn ? a : null;
+    const onB = bOn ? b : null;
+    const points = [onA, onB].filter(Boolean).map((box) => ({
+      box,
+      x: ox + elementWallOffsetM(room, box) * scale,
+      y: base - ((box.heightCm || 110) / 100) * scale,
+    }));
+    points.forEach((point) => {
+      pdf.line(point.x, point.y - 9, point.x, laneY, color, 1.1);
+    });
+    if (points.length === 2) {
+      pdf.line(points[0].x, laneY, points[1].x, laneY, color, 1.1);
+      pdf.rect((points[0].x + points[1].x) / 2 - 18, laneY - 7, 36, 11, color, "#ffffff", 0.45);
+      pdf.text(`${cableLenM(connection)}m`, (points[0].x + points[1].x) / 2, laneY + 1, 6, color, true, "center");
+    } else if (points.length === 1) {
+      const dir = points[0].x < ox + lengthM * scale / 2 ? -1 : 1;
+      const exitX = dir < 0 ? ox : ox + lengthM * scale;
+      pdf.line(points[0].x, laneY, exitX, laneY, color, 1.1);
+      pdf.text(`${cableLenM(connection)}m`, points[0].x + dir * 22, laneY - 3, 6, color, true, dir < 0 ? "right" : "left");
+    }
+  });
 
   wallElements.forEach((element) => {
     const px = ox + elementWallOffsetM(room, element) * scale;
     if (element.type === "box") {
-      const bw = Math.max(8, (element.size || 1) * 7);
-      const bh = 10;
+      const bw = Math.max(22, (element.size || 1) * 13);
+      const bh = 18;
       const cy = base - ((element.heightCm || 110) / 100) * scale;
-      const status = BOX_STATUS[element.status] || BOX_STATUS.nova;
-      pdf.rect(px - bw / 2, cy - bh / 2, bw, bh, status.color, "#ffffff", 1);
-      pdf.text(element.code || "", px, cy - 8, 6, status.color, true, "center");
-      pdf.text(`${Math.round((element.offsetM || 0) * 100)}cm / h${element.heightCm || 110}`, px, cy + 14, 6, "#777777", false, "center");
-
-      const labels = connectedCableLabels(element);
-      if (labels.length) {
-        pdf.line(px, cy - bh / 2, px, top, status.color, 0.7, "3 2");
-        labels.slice(0, 3).forEach((label, index) => {
-          pdf.text(shortPdfText(label, 34), px + 4, top + 9 + index * 7, 6, status.color);
-        });
-      }
+      drawPdfBoxFace(pdf, element, px, cy, bw, bh);
+      pdf.text(`${Math.round((element.offsetM || 0) * 100)}cm`, px, base + 11, 5.8, "#475569", true, "center");
+      pdf.text(`h ${element.heightCm || 110}cm`, px, cy + bh / 2 + 9, 5.8, "#475569", false, "center");
+      const row = wallBoxes.findIndex((box) => box.id === element.id) % 2;
+      const calloutY = Math.min(cy + bh / 2 + 19 + row * 17, y + h - 34);
+      drawPdfModuleCallout(pdf, element, px, calloutY);
     } else if (element.type === "door") {
       const dw = (element.widthM || 0.9) * scale;
-      pdf.rect(px - dw / 2, base - 1, dw, 3, "#d4882a", "#fff4dc", 0.8);
-      pdf.text("vrata", px, base + 10, 6, "#9a620f", false, "center");
+      pdf.rect(px - dw / 2, base - 44, dw, 44, "#d4882a", "#fff7ed", 0.9);
+      pdf.line(px - dw / 2, base, px - dw / 2, base - 44, "#d4882a", 1.4);
+      pdf.line(px + dw / 2, base, px + dw / 2, base - 44, "#d4882a", 1.4);
+      pdf.text(`vrata ${Math.round((element.widthM || 0.9) * 100)}cm`, px, base - 49, 6, "#9a620f", true, "center");
     } else if (element.type === "window") {
       const ww = (element.widthM || 1.2) * scale;
       const wy = base - 1.2 * scale;
-      pdf.rect(px - ww / 2, wy - 4, ww, 8, "#5a9fd4", "#eef7ff", 0.8);
-      pdf.text("prozor", px, wy + 11, 6, "#2d6f9f", false, "center");
+      pdf.rect(px - ww / 2, wy - 13, ww, 26, "#5a9fd4", "#eef7ff", 0.9);
+      pdf.line(px - ww / 2, wy, px + ww / 2, wy, "#5a9fd4", 0.7);
+      pdf.text(`prozor ${Math.round((element.widthM || 1.2) * 100)}cm`, px, wy - 18, 6, "#2d6f9f", true, "center");
     }
   });
 
@@ -447,54 +533,15 @@ function drawPdfRoom(pdf, room) {
   pdf.text(`Dozne: ${summary.boxes.length}   Kablovi: ${summary.connections.length}   Kablova: ${summary.cableM} m   Vrata: ${summary.doors}   Prozori: ${summary.windows}`, margin, 100, 9, "#475569");
 
   const cardW = pdf.w - margin * 2;
-  const cardH = 110;
+  const cardH = 158;
   [
-    ["N", margin, 124],
-    ["S", margin, 244],
-    ["W", margin, 364],
-    ["E", margin, 484],
+    ["N", margin, 118],
+    ["S", margin, 284],
+    ["W", margin, 450],
+    ["E", margin, 616],
   ].forEach(([wall, x, panelY]) => {
     drawPdfWall(pdf, room, wall, x, panelY, cardW, cardH);
   });
-
-  const roomBoxes = summary.boxes;
-  const roomConnections = summary.connections;
-  let y = 620;
-
-  pdf.text("Dozne u prostoriji", margin, y, 11, "#222222", true);
-  y += 17;
-  if (!roomBoxes.length) {
-    pdf.text("Nema dozni.", margin, y, 9, "#777777");
-  } else {
-    roomBoxes.forEach((box) => {
-      if (y > 780) {
-        pdf.addPage();
-        y = 40;
-      }
-      const modules = (box.moduli || []).map((module) => module.naziv).join(", ");
-      pdf.text(shortPdfText(`${box.code} | ${wallLabel(box.wall)} | ${box.size || 1}M | h ${box.heightCm || 110}cm | ${modules || "bez modula"}`, 110), margin, y, 8, "#333333");
-      y += 11;
-    });
-  }
-
-  y += 10;
-  pdf.text("Kablovi vezani za prostoriju", margin, y, 11, "#222222", true);
-  y += 17;
-  if (!roomConnections.length) {
-    pdf.text("Nema kablova.", margin, y, 9, "#777777");
-  } else {
-    roomConnections.forEach((connection) => {
-      if (y > 780) {
-        pdf.addPage();
-        y = 40;
-      }
-      const a = S.elements.find((element) => element.id === connection.aId);
-      const b = S.elements.find((element) => element.id === connection.bId);
-      const definition = KABLI.find((cable) => cable.sifra === (connection.kabl?.sifra || "")) || connection.kabl || {};
-      pdf.text(shortPdfText(`${a?.code || "?"} -> ${b?.code || "?"} | ${definition.naziv || definition.sifra || "Kabl"} | ${cableLenM(connection)} m`, 110), margin, y, 8, definition.boja || "#333333");
-      y += 11;
-    });
-  }
   drawFooter(pdf);
 }
 
