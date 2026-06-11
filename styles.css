@@ -150,11 +150,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .wall-preview-toolbar #wall-preview-zoom-label{min-width:72px;justify-content:center;font-family:var(--font);font-size:12px}
 .wall-preview-scroll{
   margin-bottom:14px;overflow:auto;border:1px solid var(--border2);
-  border-radius:10px;background:var(--bg);max-height:58vh;
+  border-radius:10px;background:var(--bg);max-height:62vh;
   -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;
 }
 .wall-preview-stage{width:100%;min-width:100%;transition:width .12s ease;transform-origin:top left}
-.wall-preview-svg{min-width:820px}
+.wall-preview-svg{min-width:980px}
 
 /* Form */
 .fg{display:flex;flex-direction:column;gap:6px;flex:1}

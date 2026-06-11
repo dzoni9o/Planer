@@ -500,6 +500,38 @@ function deleteElem(eid){
 function renderConnections(){
   const g=document.getElementById('g-conns');
   let html='';
+  const occupiedLabels=[];
+  S.rooms.forEach(r=>{
+    const cx=r.x+r.wPx/2, cy=r.y+r.hPx/2;
+    occupiedLabels.push({x1:cx-78,y1:cy-24,x2:cx+78,y2:cy+4});
+    occupiedLabels.push({x1:cx-52,y1:cy+3,x2:cx+52,y2:cy+23});
+  });
+  S.elements.filter(e=>e.type==='box').forEach(e=>{
+    const p=elemPx(e);
+    if(!p) return;
+    occupiedLabels.push({x1:p.x-42,y1:p.y-30,x2:p.x+42,y2:p.y+30});
+    occupiedLabels.push({x1:p.x+p.nx*36-34,y1:p.y+p.ny*36-14,x2:p.x+p.nx*36+34,y2:p.y+p.ny*36+14});
+  });
+  const allCableSegs=[];
+  S.connections.forEach(c=>{
+    const eA=S.elements.find(x=>x.id===c.aId);
+    const eB=S.elements.find(x=>x.id===c.bId);
+    if(!eA||!eB) return;
+    const pA=elemPx(eA), pB=elemPx(eB);
+    if(!pA||!pB) return;
+    const pts=cablePath(pA,pB);
+    for(let i=1;i<pts.length;i++){
+      allCableSegs.push({
+        x1:Math.min(pts[i-1].x,pts[i].x)-10,
+        y1:Math.min(pts[i-1].y,pts[i].y)-10,
+        x2:Math.max(pts[i-1].x,pts[i].x)+10,
+        y2:Math.max(pts[i-1].y,pts[i].y)+10,
+      });
+    }
+  });
+  const overlaps=(a,b)=>a.x1<b.x2&&a.x2>b.x1&&a.y1<b.y2&&a.y2>b.y1;
+  const isClearLabel=(box)=>!occupiedLabels.some(o=>overlaps(box,o))&&!allCableSegs.some(s=>overlaps(box,s));
+  const reserveLabel=(box)=>occupiedLabels.push({...box});
 
   for(const c of S.connections){
     const eA=S.elements.find(x=>x.id===c.aId);
@@ -545,13 +577,22 @@ function renderConnections(){
     if(connIdx%2===0){ if(py>0){px=-px;py=-py;} }
     else             { if(py<0){px=-px;py=-py;} }
 
-    const lx=mx+px*40, ly=my+py*40;
-
     // Clamp label anchor so it stays within cable bounding box + margin
     const allX=pts.map(p=>p.x), allY=pts.map(p=>p.y);
     const MARGIN=50;
-    const clx=Math.max(Math.min(...allX)-MARGIN, Math.min(lx, Math.max(...allX)+MARGIN));
-    const cly=Math.max(Math.min(...allY)-MARGIN, Math.min(ly, Math.max(...allY)+MARGIN));
+    const txt=`${lenM}m`;
+    const tw=txt.length*6+14;
+    const labelW=tw, labelH=18;
+    const candidateOffsets=[44,-44,70,-70,96,-96,122,-122,0];
+    let clx=mx+px*44, cly=my+py*44;
+    for(const off of candidateOffsets){
+      const lx=mx+px*off, ly=my+py*off;
+      const tx=Math.max(Math.min(...allX)-MARGIN, Math.min(lx, Math.max(...allX)+MARGIN));
+      const ty=Math.max(Math.min(...allY)-MARGIN, Math.min(ly, Math.max(...allY)+MARGIN));
+      const box={x1:tx-labelW/2-4,y1:ty-labelH/2-4,x2:tx+labelW/2+4,y2:ty+labelH/2+4};
+      if(isClearLabel(box)){ clx=tx; cly=ty; reserveLabel(box); break; }
+      if(off===candidateOffsets[candidateOffsets.length-1]){ clx=tx; cly=ty; reserveLabel(box); }
+    }
 
     // Leader line with arrowhead pointing back to cable
     html+=`<line x1="${clx}" y1="${cly}" x2="${mx}" y2="${my}"
@@ -561,9 +602,6 @@ function renderConnections(){
     html+=`<polygon points="${mx},${my} ${mx-adx*7+ady*3},${my-ady*7-adx*3} ${mx-adx*7-ady*3},${my-ady*7+adx*3}"
       fill="${kablBoja}" opacity=".65"/>`;
 
-    // Label
-    const txt=`${lenM}m`;
-    const tw=txt.length*6+14;
     html+=`<rect x="${clx-tw/2}" y="${cly-9}" width="${tw}" height="16"
       rx="4" fill="var(--bg)" stroke="${kablBoja}" stroke-width="1" opacity=".88"/>`;
     html+=`<text x="${clx}" y="${cly+2}" text-anchor="middle"
@@ -1137,7 +1175,7 @@ function showWallPreview(){
   const lenM  = wallLenM(r, wall);
   const wallH = 2.7;
 
-  const PAD=58, W=820, H=300;
+  const PAD=72, W=980, H=380;
   const scaleX = (W-PAD*2)/lenM;
   const scaleY = (H-PAD*2)/wallH;
   const floorY = PAD+(H-PAD*2);
@@ -1174,7 +1212,7 @@ function showWallPreview(){
 
   const COL_WALL = '#8aa082';
 
-  let svg = `<svg class="wall-preview-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H+110}" style="width:100%;background:#111811;border-radius:8px;display:block">`;
+  let svg = `<svg class="wall-preview-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H+190}" style="width:100%;background:#111811;border-radius:8px;display:block">`;
 
   svg+=`<line x1="${PAD}" y1="${floorY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="4"/>`;
   svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${W-PAD}" y2="${ceilY}"  stroke="${COL_WALL}" stroke-width="1.5" stroke-dasharray="5 4" opacity=".7"/>`;
@@ -1206,7 +1244,7 @@ function showWallPreview(){
     svg+=`<text x="${cx}" y="${yTop-5}" text-anchor="middle" fill="${BOX_STATUS.postojeca_bez.color}" font-size="8" font-family="Space Mono,monospace">🪟 ${Math.round((w.widthM||1.2)*100)}cm</text>`;
   });
 
-  const CABLE_BASE_Y=ceilY+10, CABLE_STEP=12;
+  const CABLE_BASE_Y=ceilY+26, CABLE_STEP=22;
   let cLayer=0;
   S.connections.forEach(conn=>{
     const eA=S.elements.find(x=>x.id===conn.aId);
@@ -1224,8 +1262,9 @@ function showWallPreview(){
       svg+=`<line x1="${ax}" y1="${ry}" x2="${bx}" y2="${ry}" stroke="${cCol}" stroke-width="1.5" stroke-dasharray="4 2"/>`;
       const len=cableLenM(conn);
       const mx=(ax+bx)/2;
-      svg+=`<rect x="${mx-16}" y="${ry-9}" width="32" height="12" rx="3" fill="var(--bg)" opacity=".9"/>`;
-      svg+=`<text x="${mx}" y="${ry-2}" text-anchor="middle" fill="${cCol}" font-size="8" font-family="Space Mono,monospace">${len}m</text>`;
+      const labelY=ry-12;
+      svg+=`<rect x="${mx-21}" y="${labelY-9}" width="42" height="14" rx="4" fill="#0b110b" stroke="${cCol}" stroke-width=".8" opacity=".96"/>`;
+      svg+=`<text x="${mx}" y="${labelY+1}" text-anchor="middle" fill="${cCol}" font-size="9" font-weight="700" font-family="Space Mono,monospace">${len}m</text>`;
     } else if(aH||bH){
       const on=aH?eA:eB, off=aH?eB:eA;
       const ox=xAt(on.offsetM,on.fromCorner), oy=floorY-((on.heightCm||110)/100)*scaleY;
@@ -1237,11 +1276,27 @@ function showWallPreview(){
       svg+=`<polygon points="${exitX},${ry} ${exitX+ad*7},${ry-4} ${exitX+ad*7},${ry+4}" fill="${cCol}"/>`;
       const offRoom=S.rooms.find(x=>x.id===off.roomId);
       const lx=exitX===PAD?PAD+8:W-PAD-8, anch=exitX===PAD?'start':'end';
-      svg+=`<text x="${lx}" y="${ry-6}" text-anchor="${anch}" fill="${(BOX_STATUS[off.status]||BOX_STATUS.nova).color}" font-size="8" font-family="Space Mono,monospace">→ ${off.code} (${offRoom?.name||'?'} · Zid ${off.wall}) · ${cableLenM(conn)}m</text>`;
+      const t=`→ ${off.code} (${offRoom?.name||'?'} · Zid ${off.wall}) · ${cableLenM(conn)}m`;
+      const tw=Math.min(260, Math.max(88, t.length*5.2));
+      const tx=anch==='start'?lx:lx-tw;
+      svg+=`<rect x="${tx-4}" y="${ry-19}" width="${tw+8}" height="15" rx="4" fill="#0b110b" stroke="${cCol}" stroke-width=".7" opacity=".94"/>`;
+      svg+=`<text x="${lx}" y="${ry-8}" text-anchor="${anch}" fill="${(BOX_STATUS[off.status]||BOX_STATUS.nova).color}" font-size="8.5" font-weight="700" font-family="Space Mono,monospace">${svgText(t)}</text>`;
     }
   });
 
   const BOX_1M=10, BOX_SLOT=8, BOX_H=16;
+  const boxLabelLane = new Map();
+  const labelLanes = [];
+  boxes
+    .map(b=>({box:b, x:xAt(b.offsetM,b.fromCorner)}))
+    .sort((a,b)=>a.x-b.x)
+    .forEach(({box,x})=>{
+      const left=x-64, right=x+64;
+      let lane=0;
+      while(labelLanes[lane]!==undefined && labelLanes[lane]>left-10) lane++;
+      labelLanes[lane]=right;
+      boxLabelLane.set(box.id, lane);
+    });
   boxes.forEach((b,idx)=>{
     const st=BOX_STATUS[b.status]||BOX_STATUS.nova;
     const cx=xAt(b.offsetM,b.fromCorner), cy=floorY-((b.heightCm||110)/100)*scaleY;
@@ -1254,14 +1309,18 @@ function showWallPreview(){
     // Vertical dashed drop line floor→box
     svg+=`<line x1="${cx}" y1="${floorY}" x2="${cx}" y2="${ry+bH}" stroke="${st.color}" stroke-width="1" stroke-dasharray="3 2" opacity=".2"/>`;
 
-    // Height kota — vertical dimension line on left of box
-    const kotaX=rx-18;
+    // Height kota — outside module text zones, away from the wall center.
+    const side = cx<W/2 ? -1 : 1;
+    const kotaX=cx+side*(bW/2+72);
+    const kotaAnchor=side<0?'end':'start';
+    const kotaTextX=kotaX+side*6;
+    const boxEdgeX=side<0?rx:rx+bW;
     svg+=`<line x1="${kotaX}" y1="${floorY}" x2="${kotaX}" y2="${cy}" stroke="${st.color}" stroke-width="1" opacity=".5"/>`;
     svg+=`<line x1="${kotaX-3}" y1="${floorY}" x2="${kotaX+3}" y2="${floorY}" stroke="${st.color}" stroke-width="1" opacity=".5"/>`;
     svg+=`<line x1="${kotaX-3}" y1="${cy}" x2="${kotaX+3}" y2="${cy}" stroke="${st.color}" stroke-width="1" opacity=".5"/>`;
-    svg+=`<text x="${kotaX-4}" y="${(floorY+cy)/2}" text-anchor="end" dominant-baseline="middle" fill="${st.color}" font-size="8" font-family="Space Mono,monospace" font-weight="700">${hCm}cm</text>`;
+    svg+=`<text x="${kotaTextX}" y="${(floorY+cy)/2}" text-anchor="${kotaAnchor}" dominant-baseline="middle" fill="${st.color}" font-size="8" font-family="Space Mono,monospace" font-weight="700">${hCm}cm</text>`;
     // Leader from kota line to box
-    svg+=`<line x1="${kotaX}" y1="${cy}" x2="${rx}" y2="${cy}" stroke="${st.color}" stroke-width="1" opacity=".3" stroke-dasharray="2 2"/>`;
+    svg+=`<line x1="${kotaX}" y1="${cy}" x2="${boxEdgeX}" y2="${cy}" stroke="${st.color}" stroke-width="1" opacity=".3" stroke-dasharray="2 2"/>`;
 
     // Box
     svg+=`<rect x="${rx}" y="${ry}" width="${bW}" height="${bH}" rx="2" fill="${st.fill}" stroke="${st.color}" stroke-width="1.5"/>`;
@@ -1286,7 +1345,8 @@ function showWallPreview(){
     const moduleRows = moduli.length
       ? moduli.map(m=>({text:`${m.kod || ''} ${shortText(m.naziv, 24)}`.trim(), color:(KAT_BOJE[m.kat]||KAT_BOJE.ostalo).color}))
       : [{text:`prazno ${cap}M`, color:'var(--text3)'}];
-    const listY = ry+bH+12;
+    const lane = boxLabelLane.get(b.id)||0;
+    const listY = ry+bH+16+lane*68;
     svg+=`<rect x="${cx-58}" y="${listY-9}" width="116" height="${Math.min(moduleRows.length,5)*11+9}" rx="4" fill="#0b110b" stroke="#2f3f2d" stroke-width=".8" opacity=".96"/>`;
     moduleRows.slice(0,5).forEach((row,i)=>{
       svg+=`<text x="${cx}" y="${listY+i*11}" text-anchor="middle" fill="${row.color}" font-size="8.5" font-weight="700" font-family="Space Mono,monospace">${svgText(row.text)}</text>`;
