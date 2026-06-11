@@ -1172,23 +1172,23 @@ function showWallPreview(){
   const doors = S.elements.filter(e=>e.roomId===roomId&&e.wall===wall&&e.type==='door');
   const wins  = S.elements.filter(e=>e.roomId===roomId&&e.wall===wall&&e.type==='window');
 
-  const COL_WALL = 'var(--border2)';
+  const COL_WALL = '#8aa082';
 
-  let svg = `<svg class="wall-preview-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H+110}" style="width:100%;background:var(--bg);border-radius:8px;display:block">`;
+  let svg = `<svg class="wall-preview-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H+110}" style="width:100%;background:#111811;border-radius:8px;display:block">`;
 
-  svg+=`<line x1="${PAD}" y1="${floorY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="3"/>`;
-  svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${W-PAD}" y2="${ceilY}"  stroke="${COL_WALL}" stroke-width="1" stroke-dasharray="4 3" opacity=".4"/>`;
-  svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${PAD}"   y2="${floorY}" stroke="${COL_WALL}" stroke-width="3"/>`;
-  svg+=`<line x1="${W-PAD}" y1="${ceilY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="3"/>`;
-  svg+=`<text x="${W/2}" y="${ceilY-14}" text-anchor="middle" fill="var(--text3)" font-size="12" font-family="Space Mono,monospace">${svgText(r.name)} · Zid ${wall} · pogled iznutra</text>`;
-  svg+=`<text x="${PAD+4}" y="${floorY+11}" text-anchor="start" fill="var(--text3)" font-size="8" font-family="Space Mono,monospace">${leftLabel}</text>`;
-  svg+=`<text x="${W-PAD-4}" y="${floorY+11}" text-anchor="end" fill="var(--text3)" font-size="8" font-family="Space Mono,monospace">${rightLabel}</text>`;
+  svg+=`<line x1="${PAD}" y1="${floorY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="4"/>`;
+  svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${W-PAD}" y2="${ceilY}"  stroke="${COL_WALL}" stroke-width="1.5" stroke-dasharray="5 4" opacity=".7"/>`;
+  svg+=`<line x1="${PAD}" y1="${ceilY}"  x2="${PAD}"   y2="${floorY}" stroke="${COL_WALL}" stroke-width="4"/>`;
+  svg+=`<line x1="${W-PAD}" y1="${ceilY}" x2="${W-PAD}" y2="${floorY}" stroke="${COL_WALL}" stroke-width="4"/>`;
+  svg+=`<text x="${W/2}" y="${ceilY-14}" text-anchor="middle" fill="#b7c3ad" font-size="13" font-weight="700" font-family="Space Mono,monospace">${svgText(r.name)} · Zid ${wall} · pogled iznutra</text>`;
+  svg+=`<text x="${PAD+4}" y="${floorY+13}" text-anchor="start" fill="#9aaa91" font-size="9" font-weight="700" font-family="Space Mono,monospace">${leftLabel}</text>`;
+  svg+=`<text x="${W-PAD-4}" y="${floorY+13}" text-anchor="end" fill="#9aaa91" font-size="9" font-weight="700" font-family="Space Mono,monospace">${rightLabel}</text>`;
 
   const dimY=floorY+24;
-  svg+=`<line x1="${PAD}" y1="${dimY}" x2="${W-PAD}" y2="${dimY}" stroke="var(--text3)" stroke-width="1" opacity=".5"/>`;
-  svg+=`<line x1="${PAD}" y1="${dimY-4}" x2="${PAD}" y2="${dimY+4}" stroke="var(--text3)" stroke-width="1" opacity=".5"/>`;
-  svg+=`<line x1="${W-PAD}" y1="${dimY-4}" x2="${W-PAD}" y2="${dimY+4}" stroke="var(--text3)" stroke-width="1" opacity=".5"/>`;
-  svg+=`<text x="${W/2}" y="${dimY+11}" text-anchor="middle" fill="var(--text3)" font-size="9" font-family="Space Mono,monospace">${lenM} m</text>`;
+  svg+=`<line x1="${PAD}" y1="${dimY}" x2="${W-PAD}" y2="${dimY}" stroke="#718068" stroke-width="1.5" opacity=".8"/>`;
+  svg+=`<line x1="${PAD}" y1="${dimY-4}" x2="${PAD}" y2="${dimY+4}" stroke="#718068" stroke-width="1.5" opacity=".8"/>`;
+  svg+=`<line x1="${W-PAD}" y1="${dimY-4}" x2="${W-PAD}" y2="${dimY+4}" stroke="#718068" stroke-width="1.5" opacity=".8"/>`;
+  svg+=`<text x="${W/2}" y="${dimY+12}" text-anchor="middle" fill="#9aaa91" font-size="10" font-weight="700" font-family="Space Mono,monospace">${lenM} m</text>`;
 
   doors.forEach(d=>{
     const cx=xAt(d.offsetM,d.fromCorner), wPx=(d.widthM||0.9)*scaleX, hPx=wPx*0.85;
@@ -1287,12 +1287,12 @@ function showWallPreview(){
       ? moduli.map(m=>({text:`${m.kod || ''} ${shortText(m.naziv, 24)}`.trim(), color:(KAT_BOJE[m.kat]||KAT_BOJE.ostalo).color}))
       : [{text:`prazno ${cap}M`, color:'var(--text3)'}];
     const listY = ry+bH+12;
-    svg+=`<rect x="${cx-54}" y="${listY-8}" width="108" height="${Math.min(moduleRows.length,5)*10+8}" rx="4" fill="var(--bg)" opacity=".92"/>`;
+    svg+=`<rect x="${cx-58}" y="${listY-9}" width="116" height="${Math.min(moduleRows.length,5)*11+9}" rx="4" fill="#0b110b" stroke="#2f3f2d" stroke-width=".8" opacity=".96"/>`;
     moduleRows.slice(0,5).forEach((row,i)=>{
-      svg+=`<text x="${cx}" y="${listY+i*10}" text-anchor="middle" fill="${row.color}" font-size="7.5" font-family="Space Mono,monospace">${svgText(row.text)}</text>`;
+      svg+=`<text x="${cx}" y="${listY+i*11}" text-anchor="middle" fill="${row.color}" font-size="8.5" font-weight="700" font-family="Space Mono,monospace">${svgText(row.text)}</text>`;
     });
     if(moduleRows.length>5){
-      svg+=`<text x="${cx}" y="${listY+50}" text-anchor="middle" fill="var(--text3)" font-size="7" font-family="Space Mono,monospace">+${moduleRows.length-5} mod.</text>`;
+      svg+=`<text x="${cx}" y="${listY+55}" text-anchor="middle" fill="#9aaa91" font-size="8" font-weight="700" font-family="Space Mono,monospace">+${moduleRows.length-5} mod.</text>`;
     }
 
     // Horizontal offset kota — below floor line, alternating rows

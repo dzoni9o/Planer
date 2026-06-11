@@ -4,11 +4,11 @@
   --surface:#1e261e;
   --surface2:#242e24;
   --surface3:#2a342a;
-  --border:#2e3a2e;
-  --border2:#384838;
+  --border:#435442;
+  --border2:#5b7058;
   --text:#e8e6d8;
   --text2:#8a9a82;
-  --text3:#4a5a44;
+  --text3:#718068;
   --accent:#e8c44a;
   --accent2:#c9a832;
   --nova:#4caf76;
@@ -184,15 +184,15 @@ select.fi{cursor:pointer}
 }
 
 /* ── SVG ELEMENTS ── */
-.room-bg{fill:rgba(255,255,255,.02);cursor:grab}
-.room-bg.dragging{fill:rgba(90,159,212,.08);cursor:grabbing}
-.room-label{fill:#5a6a54;font-size:11px;font-family:'Space Mono',monospace;text-anchor:middle;pointer-events:none;dominant-baseline:middle}
-.room-dim{fill:#3a4a34;font-size:9px;font-family:'Space Mono',monospace;text-anchor:middle;pointer-events:none;dominant-baseline:middle}
-.wall{stroke:#2e3a2e;stroke-width:3;fill:none;stroke-linecap:square}
-.wall.open{stroke:#243024;stroke-width:2;stroke-dasharray:6 5}
+.room-bg{fill:rgba(232,230,216,.045);cursor:grab}
+.room-bg.dragging{fill:rgba(90,159,212,.12);cursor:grabbing}
+.room-label{fill:#b7c3ad;font-size:12px;font-weight:700;font-family:'Space Mono',monospace;text-anchor:middle;pointer-events:none;dominant-baseline:middle}
+.room-dim{fill:#87977f;font-size:10px;font-weight:700;font-family:'Space Mono',monospace;text-anchor:middle;pointer-events:none;dominant-baseline:middle}
+.wall{stroke:#6f8369;stroke-width:4;fill:none;stroke-linecap:square}
+.wall.open{stroke:#5d6d57;stroke-width:3;stroke-dasharray:7 5}
 .wall-hit{stroke:transparent;stroke-width:28;fill:none;cursor:pointer}
-.wall.selected{stroke:var(--blue);stroke-width:4}
-.wall.selected.open{stroke:var(--blue);stroke-width:3;stroke-dasharray:6 5}
+.wall.selected{stroke:var(--blue);stroke-width:5}
+.wall.selected.open{stroke:var(--blue);stroke-width:4;stroke-dasharray:7 5}
 .door-body{stroke:var(--amber);stroke-width:3;fill:none;stroke-linecap:butt}
 .door-swing{stroke:var(--amber);stroke-width:1.8;fill:none;stroke-linecap:round}
 .win-outer{stroke:var(--blue);stroke-width:3;fill:none}
