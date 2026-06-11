@@ -305,19 +305,26 @@ function ptsToD(pts){
 //   penjanje od dozne do zone: (ZONA_H - hA) + (ZONA_H - hB)
 //   gdje je ZONA_H = 2.5m (zona provlačenja blizu plafona)
 // Horizontalna dionica: Manhattan u tlocrtu
-function cableLenM(conn){
+function cableLenParts(conn){
   const eA=S.elements.find(x=>x.id===conn.aId);
   const eB=S.elements.find(x=>x.id===conn.bId);
-  if(!eA||!eB) return 0;
-  const pA=elemPx(eA), pB=elemPx(eB);
-  if(!pA||!pB) return 0;
-  const pts=cablePath(pA,pB);
-  const horizM=pts.reduce((s,p,i)=>i===0?0:s+Math.hypot(p.x-pts[i-1].x,p.y-pts[i-1].y),0)/PX_PER_M;
-  const ZONA_H=2.5; // m od poda do zone provlačenja
+  if(!eA||!eB) return null;
+  const pA=elemWallPx(eA), pB=elemWallPx(eB);
+  if(!pA||!pB) return null;
+  const ZONA_H=2.5;
   const hA=(eA.heightCm||110)/100;
   const hB=(eB.heightCm||110)/100;
-  const vertM=(ZONA_H-hA)+(ZONA_H-hB); // penjanje od obje dozne do zone
-  return Math.round((horizM+vertM)*10)/10;
+  const vertA=Math.max(0, ZONA_H-hA);
+  const vertB=Math.max(0, ZONA_H-hB);
+  const horiz=(Math.abs(pA.x-pB.x)+Math.abs(pA.y-pB.y))/PX_PER_M;
+  const reserve=0.4;
+  return {vertA, vertB, horiz, reserve, total:vertA+vertB+horiz+reserve};
+}
+
+function cableLenM(conn){
+  const parts=cableLenParts(conn);
+  if(!parts) return 0;
+  return Math.round(parts.total*10)/10;
 }
 
 const VP_MIN = 0.25, VP_MAX = 4;

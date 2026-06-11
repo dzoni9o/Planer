@@ -1222,7 +1222,7 @@ function showWallPreview(){
       svg+=`<line x1="${ax}" y1="${ay}" x2="${ax}" y2="${ry}" stroke="${cCol}" stroke-width="1.5" stroke-dasharray="4 2"/>`;
       svg+=`<line x1="${bx}" y1="${by}" x2="${bx}" y2="${ry}" stroke="${cCol}" stroke-width="1.5" stroke-dasharray="4 2"/>`;
       svg+=`<line x1="${ax}" y1="${ry}" x2="${bx}" y2="${ry}" stroke="${cCol}" stroke-width="1.5" stroke-dasharray="4 2"/>`;
-      const len=Math.round(((Math.abs(bx-ax)+Math.abs(ay-ry)+Math.abs(by-ry))/scaleX+0.3)*10)/10;
+      const len=cableLenM(conn);
       const mx=(ax+bx)/2;
       svg+=`<rect x="${mx-16}" y="${ry-9}" width="32" height="12" rx="3" fill="var(--bg)" opacity=".9"/>`;
       svg+=`<text x="${mx}" y="${ry-2}" text-anchor="middle" fill="${cCol}" font-size="8" font-family="Space Mono,monospace">${len}m</text>`;
@@ -1237,7 +1237,7 @@ function showWallPreview(){
       svg+=`<polygon points="${exitX},${ry} ${exitX+ad*7},${ry-4} ${exitX+ad*7},${ry+4}" fill="${cCol}"/>`;
       const offRoom=S.rooms.find(x=>x.id===off.roomId);
       const lx=exitX===PAD?PAD+8:W-PAD-8, anch=exitX===PAD?'start':'end';
-      svg+=`<text x="${lx}" y="${ry-6}" text-anchor="${anch}" fill="${(BOX_STATUS[off.status]||BOX_STATUS.nova).color}" font-size="8" font-family="Space Mono,monospace">→ ${off.code} (${offRoom?.name||'?'} · Zid ${off.wall})</text>`;
+      svg+=`<text x="${lx}" y="${ry-6}" text-anchor="${anch}" fill="${(BOX_STATUS[off.status]||BOX_STATUS.nova).color}" font-size="8" font-family="Space Mono,monospace">→ ${off.code} (${offRoom?.name||'?'} · Zid ${off.wall}) · ${cableLenM(conn)}m</text>`;
     }
   });
 
