@@ -199,6 +199,8 @@ select.fi{cursor:pointer}
 .win-inner{stroke:var(--blue);stroke-width:1;fill:none;opacity:.5}
 .box-ring{stroke-width:2.5;cursor:pointer}
 .box-label{font-size:8px;font-family:'Space Mono',monospace;text-anchor:middle;pointer-events:none}
+.box-label-bg{filter:drop-shadow(0 2px 5px rgba(0,0,0,.35))}
+.box-dim-label{font-size:6.5px;font-family:'Space Mono',monospace;font-weight:700;text-anchor:middle;opacity:.82}
 .conn-path{stroke-width:2;fill:none;stroke-dasharray:6 3}
 .conn-len-bg{fill:rgba(20,26,20,.92)}
 .conn-len{font-size:8px;font-family:'Space Mono',monospace;text-anchor:middle;fill:var(--accent);dominant-baseline:middle}

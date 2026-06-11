@@ -1012,6 +1012,32 @@ function renderElements(){
   const gE=document.getElementById('g-elements');
   const gB=document.getElementById('g-boxes');
   let eHtml='', bHtml='';
+  const occupiedLabels=[];
+  const cableSegs=[];
+  S.rooms.forEach(r=>{
+    const cx=r.x+r.wPx/2, cy=r.y+r.hPx/2;
+    occupiedLabels.push({x1:cx-78,y1:cy-24,x2:cx+78,y2:cy+4});
+    occupiedLabels.push({x1:cx-54,y1:cy+3,x2:cx+54,y2:cy+22});
+  });
+  S.connections.forEach(c=>{
+    const eA=S.elements.find(x=>x.id===c.aId);
+    const eB=S.elements.find(x=>x.id===c.bId);
+    if(!eA||!eB) return;
+    const pA=elemPx(eA), pB=elemPx(eB);
+    if(!pA||!pB) return;
+    const pts=cablePath(pA,pB);
+    for(let i=1;i<pts.length;i++){
+      cableSegs.push({
+        x1:Math.min(pts[i-1].x,pts[i].x)-8,
+        y1:Math.min(pts[i-1].y,pts[i].y)-8,
+        x2:Math.max(pts[i-1].x,pts[i].x)+8,
+        y2:Math.max(pts[i-1].y,pts[i].y)+8,
+      });
+    }
+  });
+  const overlaps=(a,b)=>a.x1<b.x2&&a.x2>b.x1&&a.y1<b.y2&&a.y2>b.y1;
+  const clearLabel=(box)=>!occupiedLabels.some(o=>overlaps(box,o))&&!cableSegs.some(s=>overlaps(box,s));
+  const reserveLabel=(box)=>occupiedLabels.push({...box});
 
   for(const el of S.elements){
     const p=(el.type==='door'||el.type==='window') ? elemWallPx(el) : elemPx(el);
@@ -1104,26 +1130,37 @@ function renderElements(){
         data-eid="${el.id}" style="cursor:pointer"/>`;
 
       // Code label — offset away from wall (further to make room for dims)
-      const labelOff = hh + 12;
-      const lx=p.x+p.nx*labelOff, ly=p.y+p.ny*labelOff;
-      bHtml+=`<text class="box-label" x="${lx}" y="${ly}" fill="${st.color}"
-        dominant-baseline="middle" text-anchor="middle" data-eid="${el.id}">${el.code}</text>`;
-
-      // Dimension annotations — offset cm and height cm
-      // Show only when zoom is sufficient (always show, small text)
       const offCm=Math.round(el.offsetM*100);
       const hCm=el.heightCm||110;
-      const dimOff=labelOff+9;
-      const dimX=p.x+p.nx*dimOff, dimY=p.y+p.ny*dimOff;
-      const dimColor=st.color+'99'; // slightly transparent
-      bHtml+=`<text x="${dimX}" y="${dimY-4}" fill="${dimColor}"
-        dominant-baseline="middle" text-anchor="middle"
-        font-size="6" font-family="Space Mono,monospace"
-        pointer-events="none">${offCm}cm</text>`;
-      bHtml+=`<text x="${dimX}" y="${dimY+5}" fill="${dimColor}"
-        dominant-baseline="middle" text-anchor="middle"
-        font-size="6" font-family="Space Mono,monospace"
-        pointer-events="none">↑${hCm}</text>`;
+      const tx=isH?1:0, ty=isH?0:1;
+      const labelW=48, labelH=35;
+      const normalOffsets=[34,50,66,82,98];
+      const tangentOffsets=[0,-34,34,-68,68,-102,102];
+      let lx=p.x+p.nx*normalOffsets[0], ly=p.y+p.ny*normalOffsets[0], found=false;
+      for(const no of normalOffsets){
+        for(const to of tangentOffsets){
+          const cx=p.x+p.nx*no+tx*to;
+          const cy=p.y+p.ny*no+ty*to;
+          const box={x1:cx-labelW/2-4,y1:cy-labelH/2-4,x2:cx+labelW/2+4,y2:cy+labelH/2+4};
+          if(clearLabel(box)){
+            lx=cx; ly=cy; reserveLabel(box); found=true; break;
+          }
+        }
+        if(found) break;
+      }
+      if(!found){
+        reserveLabel({x1:lx-labelW/2-4,y1:ly-labelH/2-4,x2:lx+labelW/2+4,y2:ly+labelH/2+4});
+      }
+      bHtml+=`<line x1="${p.x}" y1="${p.y}" x2="${lx}" y2="${ly}" stroke="${st.color}" stroke-width=".8" opacity=".35" pointer-events="none"/>`;
+      bHtml+=`<rect class="box-label-bg" x="${lx-labelW/2}" y="${ly-labelH/2}" width="${labelW}" height="${labelH}"
+        rx="5" fill="#0b110b" stroke="${st.color}" stroke-width="1" opacity=".94" pointer-events="none"/>`;
+      bHtml+=`<text class="box-label" x="${lx}" y="${ly-10}" fill="${st.color}"
+        dominant-baseline="middle" text-anchor="middle" data-eid="${el.id}">${el.code}</text>`;
+      bHtml+=`<text class="box-dim-label" x="${lx}" y="${ly+2}" fill="${st.color}"
+        dominant-baseline="middle" text-anchor="middle" pointer-events="none">${offCm}cm</text>`;
+      bHtml+=`<text class="box-dim-label" x="${lx}" y="${ly+12}" fill="${st.color}"
+        dominant-baseline="middle" text-anchor="middle" pointer-events="none">h ${hCm}</text>`;
+
 
       // Size badge inside rect (if 3M+)
       if(cap>=3){
@@ -1711,6 +1748,11 @@ function _onPointerUp(e){
 }
 
 function _onPointerCancel(e){
+  if(_multiTouch){
+    _forgetPointer(e);
+    if(_touchPointerList().length<2) _cancelGesture(e);
+    return;
+  }
   if(_activePointerId!==null && _activePointerId!==e.pointerId) return;
   try { e.currentTarget?.releasePointerCapture?.(e.pointerId); } catch {}
   _forgetPointer(e);
@@ -1914,7 +1956,9 @@ function _onMouseUp(e){
 function _onWheel(e){
   e.preventDefault();
   const r  = document.getElementById('svg').getBoundingClientRect();
-  zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1/1.12);
+  const wheel = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+  const factor = Math.exp(-wheel * 0.0018);
+  zoomAt(e.clientX - r.left, e.clientY - r.top, factor);
 }
 
 function _pinchDist(t){
